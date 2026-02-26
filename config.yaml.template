@@ -15,4 +15,10 @@ policy:
     emergency: 0.92
   prefer_large_first: true
 
+notifications:
+  log_room_id: "!YOUR_LOG_ROOM_ID:catcord.duckdns.org"
+  send_deletion_summary: true
+  send_nightly_status: true
+  send_zero_deletion_summaries: false
+
 rooms_allowlist: []
