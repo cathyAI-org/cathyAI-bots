@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import yaml
 from mautrix.client import Client
+from mautrix.api import HTTPAPI
 from mautrix.types import EventType, RoomID, MessageEvent
 
 def load_config(path: str) -> dict:
@@ -181,11 +182,11 @@ async def send_summary(client: Client, cfg: dict, log_room: str, mode: str, dele
     await client.send_text(RoomID(log_room), msg)
 
 async def async_main(args, cfg):
-    client = Client(
-        mxid=cfg["bot"]["mxid"],
+    api = HTTPAPI(
         base_url=cfg["homeserver_url"],
-        access_token=cfg["bot"]["access_token"],
+        token=cfg["bot"]["access_token"],
     )
+    client = Client(mxid=cfg["bot"]["mxid"], api=api)
     conn = init_db("/state/uploads.db")
     
     try:
