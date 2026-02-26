@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import yaml
 from mautrix.client import Client
 from mautrix.api import HTTPAPI
-from mautrix.types import EventType, RoomID, MessageEvent
+from mautrix.types import EventType, RoomID, EventID, MessageEvent
 
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
@@ -110,7 +110,7 @@ async def run_retention(client: Client, conn, cfg: dict, dry_run: bool):
             print(f"[DRY-RUN] Would delete: {event_id} ({size} bytes, {len(paths)} files)")
         else:
             try:
-                await client.redact(RoomID(room_id), event_id, reason="retention policy")
+                await client.redact(RoomID(room_id), EventID(event_id), reason="retention policy")
                 for p in paths:
                     if p.exists():
                         freed_bytes += p.stat().st_size
@@ -154,7 +154,7 @@ async def run_pressure(client: Client, conn, cfg: dict, dry_run: bool):
             print(f"[DRY-RUN] Would delete: {event_id} ({size} bytes, {len(paths)} files)")
         else:
             try:
-                await client.redact(RoomID(room_id), event_id, reason="disk pressure")
+                await client.redact(RoomID(room_id), EventID(event_id), reason="disk pressure")
                 for p in paths:
                     if p.exists():
                         freed_bytes += p.stat().st_size
@@ -190,7 +190,9 @@ async def async_main(args, cfg):
     conn = init_db("/state/uploads.db")
     
     try:
-        await client.start()
+        me = await client.whoami()
+        print(f"Authenticated as: {me.user_id}")
+        
         await sync_uploads(client, conn, cfg)
         
         if args.mode == "retention":
@@ -205,7 +207,10 @@ async def async_main(args, cfg):
         print(f"Completed: {deleted} events, {freed/(1024*1024):.1f}MB freed")
     finally:
         conn.close()
-        await client.stop()
+        try:
+            await api.session.close()
+        except Exception:
+            pass
 
 def main():
     p = argparse.ArgumentParser()
