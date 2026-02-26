@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  cleaner:
+    build:
+      context: .
+      dockerfile: cleaner/Dockerfile
+    image: catcord/cleaner:latest
+    container_name: cleaner_bot
+    restart: "no"
+    volumes:
+      - ./cleaner/config.yaml:/config/config.yaml:ro
+      - /var/lib/catcord/cleaner:/state:rw
+      - /srv/media:/srv/media:rw
+    networks:
+      - internal
+
+networks:
+  internal:
+    external: true
+    name: catcord_internal

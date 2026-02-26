@@ -1,93 +1,90 @@
-# server-cleaner-bot-a
+# Catcord Bots Framework
 
-Matrix bot for automated media cleanup with SQLite tracking and filesystem deletion.
+Shared framework for Matrix bots with individual bot services.
 
-## Features
+## Structure
 
-- SQLite database tracking of media uploads (event_id, room_id, sender, mxc_uri, mimetype, size, timestamp)
-- Retention-based cleanup: Delete media older than configured days
-- Pressure-based cleanup: Delete media when disk usage exceeds threshold
-- Prioritizes non-images (videos, files) before images
-- Dry-run mode for safe testing
-- Matrix notifications posted to log room
-- Deletes both Matrix events (redaction) and actual files from `/srv/media`
+```
+./
+  docker-compose.bots.yml    # All bots orchestration
+  framework/                 # Shared runtime
+    catcord_bots/           # Python package
+    Dockerfile              # Base image
+  cleaner/                  # Cleaner bot (batch job)
+    main.py
+    cleaner.py
+    Dockerfile
+    config.yaml
+```
 
-## Usage
+## Build Instructions
+
+### 1. Build framework base image
 
 ```bash
-# Dry-run (safe testing)
-python main.py --mode retention --config config.yaml --dry-run
-python main.py --mode pressure --config config.yaml --dry-run
-
-# Live execution
-python main.py --mode retention --config config.yaml
-python main.py --mode pressure --config config.yaml
+docker build -t catcord-bots-framework:latest ./framework
 ```
 
-## Modes
+### 2. Build bot images
 
-### Retention Mode
-Deletes media older than configured retention periods:
-- Images: 90 days (default)
-- Non-images: 30 days (default)
-
-Deletion order: non-images first → oldest first → largest first
-
-### Pressure Mode
-Activates when disk usage exceeds threshold (85% default):
-- Deletes media until usage drops below threshold
-- Prioritizes large non-images to maximize space freed
-
-Deletion order: non-images first → largest first
-
-## Configuration
-
-`config.yaml` structure:
-
-```yaml
-homeserver_url: "http://conduit:6167"
-server_name: "example.org"
-
-bot:
-  mxid: "@cleaner:example.org"
-  access_token: "<token>"
-
-policy:
-  retention_days:
-    image: 90
-    non_image: 30
-  disk_thresholds:
-    pressure: 0.85
-    emergency: 0.92
-  prefer_large_first: true
-
-notifications:
-  log_room_id: "!room:example.org"
-  send_deletion_summary: true
-  send_nightly_status: true
-  send_zero_deletion_summaries: false
-
-rooms_allowlist: []  # Empty = all joined rooms
+```bash
+docker-compose -f docker-compose.bots.yml build
 ```
 
-## Database
+## Running Bots
 
-Uploads tracked in `/state/uploads.db`:
-- Syncs last 100 messages per room on each run
-- Stores event metadata for efficient querying
-- Removes entries after successful deletion
+### Cleaner Bot (batch mode)
 
-## Docker
+Dry-run pressure check:
+```bash
+docker-compose -f docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode pressure --dry-run
+```
 
-Requires mounts:
-- `/config` - Configuration file
-- `/state` - SQLite database persistence
-- `/srv/media` - Media files to clean
+Dry-run retention:
+```bash
+docker-compose -f docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode retention --dry-run
+```
 
-## Dependencies
+Production runs:
+```bash
+docker-compose -f docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode pressure
+docker-compose -f docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode retention
+```
 
-- mautrix >= 0.20.0
-- aiohttp >= 3.9.0
-- aiosqlite >= 0.20.0
-- PyYAML >= 6.0.1
-- python-dateutil >= 2.9.0
+## Deployment to Server
+
+1. Copy entire repo to `/opt/catcord/bots/`
+2. Build framework image on server
+3. Build bot images
+4. Create systemd timers
+
+### Systemd Timer Example
+
+Pressure check every 2 minutes:
+```ini
+[Unit]
+Description=Cleaner bot pressure check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /var/lock/catcord/cleaner.lock /usr/bin/docker-compose -f /opt/catcord/bots/docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode pressure
+WorkingDirectory=/opt/catcord/bots
+```
+
+Nightly retention:
+```ini
+[Unit]
+Description=Cleaner bot retention
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /var/lock/catcord/cleaner.lock /usr/bin/docker-compose -f /opt/catcord/bots/docker-compose.bots.yml run --rm cleaner --config /config/config.yaml --mode retention
+WorkingDirectory=/opt/catcord/bots
+```
+
+## Adding New Bots
+
+1. Create new bot directory (e.g., `news/`, `chat/`)
+2. Add bot service to `docker-compose.bots.yml`
+3. Bot Dockerfile inherits from `catcord-bots-framework:latest`
+4. Import from `catcord_bots` package

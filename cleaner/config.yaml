@@ -1,0 +1,23 @@
+homeserver_url: "http://conduit:6167"
+server_name: "catcord.duckdns.org"
+
+bot:
+  mxid: "@catcord_cleaner:catcord.duckdns.org"
+  access_token: "iDMS2IPaewrpQ75kJAOOoLuHTzlrlmcb"
+
+policy:
+  retention_days:
+    image: 90
+    non_image: 30
+  disk_thresholds:
+    pressure: 0.85
+    emergency: 0.92
+  prefer_large_first: true
+
+notifications:
+  log_room_id: "!7v8paEHyTUpr285UsmGo3mzS9Cjw4wQ-60e9kmKCSrI:catcord.duckdns.org"
+  send_deletion_summary: true
+  send_nightly_status: true
+  send_zero_deletion_summaries: false
+
+rooms_allowlist: []

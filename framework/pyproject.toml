@@ -1,0 +1,11 @@
+[project]
+name = "catcord-bots-framework"
+version = "0.1.0"
+dependencies = [
+  "mautrix>=0.21.0",
+  "PyYAML>=6.0.1",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
