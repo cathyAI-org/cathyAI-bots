@@ -44,9 +44,11 @@ class TestCleanerBot:
         assert cfg.character_id == "irina"
         assert cfg.characters_api_key is None
         assert cfg.characters_api_key_header == "X-API-Key"
-        assert cfg.timeout_seconds == 6
+        assert cfg.timeout_seconds == 15
         assert cfg.max_tokens == 180
         assert cfg.temperature == 0.2
+        assert cfg.cathy_api_mode == "ollama"
+        assert cfg.cathy_api_model == "phi3.5:latest"
 
     def test_personality_config_with_auth(self):
         cfg = PersonalityConfig(

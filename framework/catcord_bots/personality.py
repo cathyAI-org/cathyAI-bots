@@ -17,14 +17,14 @@ class PersonalityRenderer:
         cathy_api_key: Optional[str] = None,
         characters_api_key: Optional[str] = None,
         characters_api_key_header: str = "X-API-Key",
-        timeout_seconds: float = 6,
+        timeout_seconds: float = 15,
         connect_timeout_seconds: float = 2,
         max_tokens: int = 180,
         temperature: float = 0.2,
         top_p: float = 0.9,
         min_seconds_between_calls: int = 30,
         cathy_api_mode: str = "ollama",
-        cathy_api_model: str = "gemma2:2b",
+        cathy_api_model: str = "phi3.5:latest",
     ):
         self.characters_api_url = characters_api_url
         self.character_id = character_id
@@ -228,5 +228,6 @@ class PersonalityRenderer:
                         return text
                     return None
 
-        except Exception:
+        except Exception as e:
+            print(f"PersonalityRenderer exception: {e!r}")
             return None

@@ -58,7 +58,7 @@ The personality renderer supports two API modes:
 - `cathy_api_mode: "ollama"` - Uses Ollama `/api/chat` endpoint
 - `cathy_api_mode: "openai"` - Uses OpenAI-compatible `/v1/chat/completions` endpoint
 
-Set `cathy_api_model` to your model name (e.g., `llama3`, `gemma2:2b`, `cathy`).
+Set `cathy_api_model` to your model name (e.g., `llama3`, `phi3.5:latest`, `cathy`).
 
 ### Characters API Authentication
 
@@ -79,7 +79,7 @@ add_personality:
   character_id: "irina"
   cathy_api_url: "http://192.168.1.57:8100"
   cathy_api_mode: "ollama"
-  cathy_api_model: "gemma2:2b"
+  cathy_api_model: "phi3.5:latest"
 ```
 
 ## Tests
