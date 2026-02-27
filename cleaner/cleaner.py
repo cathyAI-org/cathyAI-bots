@@ -248,10 +248,14 @@ async def run_retention(
                 rendered = await renderer.render(summary_payload)
                 if rendered:
                     message = prefix + rendered
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"AI render failed: {e}")
         
-        await send_text(session, notifications_room, message)
+        try:
+            await send_text(session, notifications_room, message)
+            print(f"Sent message to {notifications_room}")
+        except Exception as e:
+            print(f"Failed to send message: {e}")
 
 
 async def run_pressure(
@@ -373,7 +377,11 @@ async def run_pressure(
                 rendered = await renderer.render(summary_payload)
                 if rendered:
                     message = prefix + rendered
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"AI render failed: {e}")
         
-        await send_text(session, notifications_room, message)
+        try:
+            await send_text(session, notifications_room, message)
+            print(f"Sent message to {notifications_room}")
+        except Exception as e:
+            print(f"Failed to send message: {e}")
