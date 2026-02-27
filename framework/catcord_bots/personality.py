@@ -20,6 +20,8 @@ class PersonalityRenderer:
         temperature: float = 0.2,
         top_p: float = 0.9,
         min_seconds_between_calls: int = 30,
+        cathy_api_mode: str = "ollama",
+        cathy_api_model: str = "gemma2:2b",
     ):
         self.characters_api_url = characters_api_url
         self.character_id = character_id
@@ -32,6 +34,8 @@ class PersonalityRenderer:
         self.temperature = temperature
         self.top_p = top_p
         self.min_seconds_between_calls = min_seconds_between_calls
+        self.cathy_api_mode = cathy_api_mode
+        self.cathy_api_model = cathy_api_model
         self._last_call_ts: float = 0.0
         self._cached_prompt: Optional[str] = None
         self._cached_etag: Optional[str] = None
@@ -108,32 +112,52 @@ class PersonalityRenderer:
             if self.cathy_api_key:
                 headers["Authorization"] = f"Bearer {self.cathy_api_key}"
 
-            body = {
-                "model": "cathy",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "max_tokens": self.max_tokens,
-                "stream": False,
-            }
-
             async with httpx.AsyncClient(timeout=timeout) as client:
-                r = await client.post(
-                    f"{self.cathy_api_url.rstrip('/')}/v1/chat/completions",
-                    headers=headers,
-                    json=body,
-                )
-                r.raise_for_status()
-                data = r.json()
-                text = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                    .strip()
-                )
+                if self.cathy_api_mode.lower() == "ollama":
+                    body = {
+                        "model": self.cathy_api_model,
+                        "stream": False,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "options": {
+                            "temperature": self.temperature,
+                        },
+                    }
+                    r = await client.post(
+                        f"{self.cathy_api_url.rstrip('/')}/api/chat",
+                        headers=headers,
+                        json=body,
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    text = (data.get("message") or {}).get("content", "").strip()
+                else:
+                    body = {
+                        "model": self.cathy_api_model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": self.temperature,
+                        "top_p": self.top_p,
+                        "max_tokens": self.max_tokens,
+                        "stream": False,
+                    }
+                    r = await client.post(
+                        f"{self.cathy_api_url.rstrip('/')}/v1/chat/completions",
+                        headers=headers,
+                        json=body,
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    text = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                        .strip()
+                    )
                 if text:
                     return text
                 return None

@@ -138,6 +138,8 @@ class PersonalityConfig:
     top_p: float = 0.9
     min_seconds_between_calls: int = 30
     fallback_system_prompt: str = "You are a maintenance bot. Write short, calm, factual ops updates."
+    cathy_api_mode: str = "openai"
+    cathy_api_model: str = "cathy"
 
 
 async def run_retention(
@@ -240,6 +242,8 @@ async def run_retention(
                     temperature=ai_cfg.temperature,
                     top_p=ai_cfg.top_p,
                     min_seconds_between_calls=ai_cfg.min_seconds_between_calls,
+                    cathy_api_mode=ai_cfg.cathy_api_mode,
+                    cathy_api_model=ai_cfg.cathy_api_model,
                 )
                 rendered = await renderer.render(summary_payload)
                 if rendered:
@@ -363,6 +367,8 @@ async def run_pressure(
                     temperature=ai_cfg.temperature,
                     top_p=ai_cfg.top_p,
                     min_seconds_between_calls=ai_cfg.min_seconds_between_calls,
+                    cathy_api_mode=ai_cfg.cathy_api_mode,
+                    cathy_api_model=ai_cfg.cathy_api_model,
                 )
                 rendered = await renderer.render(summary_payload)
                 if rendered:

@@ -15,6 +15,8 @@ class TestFramework:
         assert renderer.fallback_system_prompt == "Test prompt"
         assert renderer.timeout_seconds == 6
         assert renderer.min_seconds_between_calls == 30
+        assert renderer.cathy_api_mode == "ollama"
+        assert renderer.cathy_api_model == "gemma2:2b"
 
     def test_personality_renderer_rate_limiting(self):
         renderer = PersonalityRenderer(

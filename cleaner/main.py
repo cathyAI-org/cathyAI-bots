@@ -45,6 +45,8 @@ async def main_async(args):
                 top_p=float(ai_raw.get("top_p", 0.9)),
                 min_seconds_between_calls=int(ai_raw.get("min_seconds_between_calls", 30)),
                 fallback_system_prompt=str(ai_raw.get("fallback_system_prompt", "You are a maintenance bot. Write short, calm, factual ops updates.")),
+                cathy_api_mode=str(ai_raw.get("cathy_api_mode", "openai")),
+                cathy_api_model=str(ai_raw.get("cathy_api_model", "cathy")),
             )
             if args.mode == "retention":
                 await run_retention(

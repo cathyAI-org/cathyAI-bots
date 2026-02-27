@@ -22,7 +22,7 @@ Shared framework for Matrix bots with individual bot services.
 
 - **Framework**: Shared Matrix client, config parsing, AI summary rendering
 - **Cleaner Bot**: Automated media cleanup with retention and pressure modes
-- **AI Summaries**: Optional Irina-voiced summaries via characters API
+- **Personality**: Optional summaries with personality via characters API
 
 ## Setup
 
@@ -50,6 +50,15 @@ Production:
 docker-compose run --rm cleaner --config /config/config.yaml --mode pressure
 docker-compose run --rm cleaner --config /config/config.yaml --mode retention
 ```
+
+## AI Configuration
+
+The personality renderer supports two API modes:
+
+- `cathy_api_mode: "ollama"` - Uses Ollama `/api/chat` endpoint
+- `cathy_api_mode: "openai"` - Uses OpenAI-compatible `/v1/chat/completions` endpoint
+
+Set `cathy_api_model` to your model name (e.g., `llama3`, `gemma2:2b`, `cathy`).
 
 ## Tests
 
