@@ -24,7 +24,7 @@ rooms_allowlist: []
 
 add_personality:
   enabled: true
-  prompt_composer_url: "http://192.168.1.59:8110"
+  prompt_composer_url: "http://192.168.1.57:8110"
   characters_api_url: "http://192.168.1.59:8090"
   characters_api_key: "kOKZyFeDlkc9VnF0oVO_nsi49y3p0FclhsBSJoVA-Kc"
   characters_api_key_header: "X-API-Key"
