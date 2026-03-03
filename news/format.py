@@ -1,5 +1,6 @@
 """Deterministic formatting for news payloads."""
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 
 def format_digest(
@@ -60,7 +61,6 @@ def _format_timestamp(iso_str: str) -> str:
         return "Unknown"
     
     try:
-        from datetime import datetime
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
         return dt.strftime("%Y-%m-%d %H:%M")
     except Exception:

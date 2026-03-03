@@ -270,6 +270,26 @@ ONLINE_ALLOWLIST_ROOMS="!room1:server,!room2:server"
 
 Leave empty to allow all rooms. The service will return 403 for non-allowlisted rooms.
 
+**Identity Resolution (Optional):**
+
+Enable automatic person_id resolution and creation in memory service:
+
+```bash
+# In services/.env
+IDENTITY_API_URL="http://192.168.1.59:8092"
+IDENTITY_API_KEY="your_key_here"
+IDENTITY_API_TIMEOUT_S=3
+```
+
+When enabled, memory service will:
+1. Normalize external_user_id to consistent format (e.g. `matrix:@user:server`)
+2. Call `GET /identity/resolve?external_id=...` to resolve person_id
+3. If unknown (404), create new person_id and call `POST /identity/link` to register
+4. Store event with resolved person_id
+5. If identity API is down, fail open (store with NULL person_id + metadata flag)
+
+This ensures all events have reliable person_id for cross-bot memory and prevents identity fragmentation.
+
 ## License
 
 See repository license file.

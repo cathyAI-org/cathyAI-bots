@@ -195,7 +195,7 @@ async def run_digest(
                 cathy_api_model=ai_cfg.cathy_api_model,
             )
             
-            ai_prefix = await renderer.render(payload)
+            ai_prefix = await renderer.render(payload, task_id="news_digest_prefix")
             if ai_prefix:
                 ai_prefix = ai_prefix.strip().strip('"').strip("'").strip()
                 print("AI render: used")

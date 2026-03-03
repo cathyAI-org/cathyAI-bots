@@ -83,8 +83,25 @@ class PersonalityRenderer:
         self._last_call_ts = now
         return False
 
+    def _infer_task(self, summary_payload: Dict[str, Any]) -> str:
+        """Infer task from payload mode (for backward compatibility).
+        
+        :param summary_payload: Summary data
+        :type summary_payload: Dict[str, Any]
+        :return: Task identifier
+        :rtype: str
+        """
+        mode = summary_payload.get("mode", "unknown")
+        if mode == "pressure":
+            return "pressure_status"
+        elif mode == "retention":
+            return "retention_report"
+        elif mode == "daily_digest":
+            return "news_digest_prefix"
+        return "retention_report"
+
     async def _compose_prompt(
-        self, client: httpx.AsyncClient, summary_payload: Dict[str, Any]
+        self, client: httpx.AsyncClient, summary_payload: Dict[str, Any], task: str
     ) -> Optional[Dict[str, Any]]:
         """Call prompt-composer to build system prompt and messages.
         
@@ -92,12 +109,11 @@ class PersonalityRenderer:
         :type client: httpx.AsyncClient
         :param summary_payload: Summary data for prompt composition
         :type summary_payload: Dict[str, Any]
+        :param task: Task identifier for prompt-composer
+        :type task: str
         :return: Prompt bundle or None on failure
         :rtype: Optional[Dict[str, Any]]
         """
-        mode = summary_payload.get("mode", "unknown")
-        task = "pressure_status" if mode == "pressure" else "retention_report"
-        
         body = {
             "task": task,
             "platform": "matrix",
@@ -273,11 +289,15 @@ class PersonalityRenderer:
 
         return True, ""
 
-    async def render(self, summary_payload: Dict[str, Any]) -> Optional[str]:
+    async def render(
+        self, summary_payload: Dict[str, Any], task_id: Optional[str] = None
+    ) -> Optional[str]:
         """Render AI prefix using prompt-composer and LLM.
         
         :param summary_payload: Summary data for rendering
         :type summary_payload: Dict[str, Any]
+        :param task_id: Explicit task identifier (overrides mode inference)
+        :type task_id: Optional[str]
         :return: Generated prefix or None if rate limited
         :rtype: Optional[str]
         """
@@ -293,7 +313,8 @@ class PersonalityRenderer:
             )
 
             async with httpx.AsyncClient(timeout=timeout) as client:
-                prompt_bundle = await self._compose_prompt(client, summary_payload)
+                task = task_id or self._infer_task(summary_payload)
+                prompt_bundle = await self._compose_prompt(client, summary_payload, task)
                 if not prompt_bundle:
                     print("PersonalityRenderer: no prompt bundle, skipping AI", flush=True)
                     return None

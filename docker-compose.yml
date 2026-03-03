@@ -27,6 +27,10 @@ services:
     image: catcord/memory:latest
     container_name: memory_service
     restart: unless-stopped
+    environment:
+      - IDENTITY_API_URL=${IDENTITY_API_URL:-}
+      - IDENTITY_API_KEY=${IDENTITY_API_KEY:-}
+      - IDENTITY_API_TIMEOUT_S=${IDENTITY_API_TIMEOUT_S:-3}
     volumes:
       - /var/lib/catcord/memory:/state:rw
     networks:

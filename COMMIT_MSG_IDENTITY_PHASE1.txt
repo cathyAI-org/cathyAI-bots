@@ -1,0 +1,22 @@
+[feat]: Implement Phase 1 identity resolution in memory service
+
+Description:
+
+  - Added normalize_external_id() to format external IDs consistently (matrix:, chainlit:, discord: prefixes)
+  - Implemented resolve_or_create_person_id() with cathyAI-identity-db API integration
+  - Calls GET /identity/resolve?external_id=... to resolve existing person_id
+  - On 404, creates new person_id (uuid4) and calls POST /identity/link to register
+  - Uses x-api-key header authentication matching identity service
+  - Fail-open behavior: stores event with NULL person_id + metadata flag if identity API down
+  - Added IDENTITY_API_URL, IDENTITY_API_KEY, IDENTITY_API_TIMEOUT_S environment variables
+  - Updated docker-compose.yml to pass identity env vars to memory service
+  - Updated services/.env.template with identity configuration documentation
+  - Updated README with detailed identity resolution behavior and setup
+
+Additional info:
+
+  - Ensures all events have reliable person_id for cross-bot memory
+  - Prevents identity fragmentation across sources (Matrix, Chainlit, etc.)
+  - Graceful degradation when identity service unavailable
+  - All 42 tests passing
+  - Ready for Phase 2 (curated memories table)

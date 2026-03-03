@@ -3,12 +3,19 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import sqlite3
+import httpx
+import os
+import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 app = FastAPI(title="catcord-memory", version="1.0.0")
 
 DB_PATH = Path("/state/db.sqlite3")
+IDENTITY_API_URL = None
+IDENTITY_API_KEY = None
+IDENTITY_API_TIMEOUT_S = 3.0
 
 
 class IngestRequest(BaseModel):
@@ -82,6 +89,98 @@ def init_db():
     conn.close()
 
 
+def normalize_external_id(source: str, external_user_id: str) -> str:
+    """Normalize external ID to consistent format.
+    
+    :param source: Source system
+    :type source: str
+    :param external_user_id: External user ID
+    :type external_user_id: str
+    :return: Normalized external ID
+    :rtype: str
+    """
+    s = (source or "").strip().lower()
+    ext = (external_user_id or "").strip()
+    if not ext:
+        return ext
+    if any(ext.startswith(p) for p in ("matrix:", "chainlit:", "discord:")):
+        return ext
+    if s == "matrix" and ext.startswith("@"):
+        return f"matrix:{ext}"
+    if s == "chainlit":
+        return f"chainlit:username:{ext}"
+    return f"{s}:{ext}" if s else ext
+
+
+async def resolve_or_create_person_id(
+    source: str, external_user_id: str, preferred_name: Optional[str] = None
+) -> Optional[str]:
+    """Resolve or create person ID via identity API.
+    
+    :param source: Source system
+    :type source: str
+    :param external_user_id: External user ID
+    :type external_user_id: str
+    :param preferred_name: Optional preferred name
+    :type preferred_name: Optional[str]
+    :return: Resolved/created person ID or None on failure
+    :rtype: Optional[str]
+    """
+    if not IDENTITY_API_URL or not IDENTITY_API_KEY:
+        return None
+    
+    external_id = normalize_external_id(source, external_user_id)
+    if not external_id:
+        return None
+    
+    headers = {"x-api-key": IDENTITY_API_KEY}
+    timeout = httpx.Timeout(IDENTITY_API_TIMEOUT_S)
+    
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # Try resolve
+            resp = await client.get(
+                f"{IDENTITY_API_URL}/identity/resolve",
+                params={"external_id": external_id},
+                headers=headers,
+            )
+            
+            if resp.status_code == 200:
+                person_id = resp.json().get("person_id")
+                print(f"Resolved {external_id} -> {person_id}")
+                return person_id
+            
+            if resp.status_code != 404:
+                print(f"Identity resolve error {resp.status_code} for {external_id}")
+                return None
+            
+            # Unknown -> create + link
+            new_person_id = str(uuid.uuid4())
+            body = {
+                "person_id": new_person_id,
+                "external_ids": [external_id],
+            }
+            if preferred_name:
+                body["preferred_name"] = preferred_name
+            
+            link_resp = await client.post(
+                f"{IDENTITY_API_URL}/identity/link",
+                json=body,
+                headers=headers,
+            )
+            
+            if link_resp.status_code == 200:
+                print(f"Created {external_id} -> {new_person_id}")
+                return new_person_id
+            
+            print(f"Identity link error {link_resp.status_code} for {external_id}")
+            return None
+            
+    except Exception as e:
+        print(f"Identity resolution failed for {external_id}: {e!r}")
+        return None
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize service on startup.
@@ -89,8 +188,12 @@ async def startup():
     :return: None
     :rtype: None
     """
+    global IDENTITY_API_URL, IDENTITY_API_KEY, IDENTITY_API_TIMEOUT_S
+    IDENTITY_API_URL = os.getenv("IDENTITY_API_URL")
+    IDENTITY_API_KEY = os.getenv("IDENTITY_API_KEY")
+    IDENTITY_API_TIMEOUT_S = float(os.getenv("IDENTITY_API_TIMEOUT_S", "3.0"))
     init_db()
-    print("Memory service started")
+    print(f"Memory service started (identity={'enabled' if IDENTITY_API_URL else 'disabled'})")
 
 
 @app.get("/health")
@@ -112,8 +215,16 @@ async def ingest_event(req: IngestRequest):
     :return: Ingest response
     :rtype: IngestResponse
     """
+    # Resolve person_id if not provided
+    person_id = req.person_id
+    metadata = req.metadata or {}
     
-    import json
+    if not person_id:
+        person_id = await resolve_or_create_person_id(
+            req.source, req.external_user_id
+        )
+        if not person_id:
+            metadata["identity_resolution"] = "failed"
     
     conn = sqlite3.connect(DB_PATH)
     try:
@@ -125,14 +236,14 @@ async def ingest_event(req: IngestRequest):
         """, (
             req.source,
             req.external_user_id,
-            req.person_id,
+            person_id,
             req.room_id,
             req.session_id,
             req.char_id,
             req.role,
             req.content,
             req.ts,
-            json.dumps(req.metadata) if req.metadata else None,
+            json.dumps(metadata) if metadata else None,
             datetime.now(timezone.utc).isoformat(),
         ))
         conn.commit()
@@ -140,7 +251,7 @@ async def ingest_event(req: IngestRequest):
     finally:
         conn.close()
     
-    return IngestResponse(event_id=event_id, person_id=req.person_id)
+    return IngestResponse(event_id=event_id, person_id=person_id)
 
 
 @app.post("/v1/memory/query", response_model=QueryResponse)
@@ -152,9 +263,6 @@ async def query_memory(req: QueryRequest):
     :return: Query response
     :rtype: QueryResponse
     """
-    
-    import json
-    
     conn = sqlite3.connect(DB_PATH)
     try:
         where_clauses = []

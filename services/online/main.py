@@ -7,6 +7,7 @@ import httpx
 import sqlite3
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -63,7 +64,6 @@ async def startup():
     :rtype: None
     """
     global ALLOWLIST_ROOMS
-    import os
     
     allowlist_str = os.getenv("ONLINE_ALLOWLIST_ROOMS", "")
     if allowlist_str:
