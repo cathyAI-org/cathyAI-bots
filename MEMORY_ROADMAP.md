@@ -12,12 +12,26 @@
   - Creates new person_id on 404 via POST /identity/link
   - Fail-open behavior (NULL person_id + metadata flag if API down)
   - Consistent ID normalization (matrix:, chainlit:, discord: prefixes)
+- ✅ **Phase 2 Complete:** Curated memories with idempotent upsert
+  - Fingerprint-based upsert (sha256 of person_id|scope|char_id|type|normalized_text)
+  - Transactional merge: source_event_ids (set-union), importance (max)
+  - Soft delete support (deleted_at)
+  - Scope field (character, person_global, room, session)
+  - Type allowlist (preference, fact, goal, relationship, project, open_loop)
+  - Three indexes for fast retrieval
+  - Upsert, list, forget endpoints
+- ✅ **Phase 3 Complete:** Rule-based memory extraction
+  - Conservative high-precision regex patterns in YAML
+  - RuleExtractor with validation and deduplication
+  - POST /v1/memories/extract endpoint
+  - Returns candidates (proposed) and upserted (stored)
+  - Automatic person_id resolution
+  - Template-based text formatting
 
 **What's Missing:**
-- ❌ Curated memories (important facts extraction)
+- ❌ LLM fallback for extraction (rules-first complete)
 - ❌ Vector embeddings / semantic search
-- ❌ Importance scoring
-- ❌ Memory consolidation/distillation
+- ❌ Enhanced query API (curated + semantic + recent + sources)
 
 ## ✅ Phase 1: Identity Resolution (COMPLETE)
 
@@ -40,11 +54,31 @@
 - `services/.env.template`
 - `README.md`
 
-## Phase 2: Curated Memories Table
+## ✅ Phase 2: Curated Memories Table (COMPLETE)
 
 **Goal:** Store important facts separately from event log with idempotent upsert
 
-**Schema:**
+**Implemented:**
+- Memories table with all fields and indexes
+- Fingerprint computation: sha256(person_id|scope|char_id_or_empty|type|normalized_text)
+- Text normalization: strip + collapse whitespace + lowercase (store original text)
+- Transactional upsert with source_event_ids merge (set-union) and importance update (max)
+- Soft delete support (deleted_at)
+- Type allowlist: preference, fact, goal, relationship, project, open_loop
+- Scope allowlist: character, person_global, room, session
+- POST /v1/memories/upsert - Idempotent upsert via fingerprint
+- GET /v1/memories/list - Filter by person_id, char_id, scope, include_deleted
+- POST /v1/memories/forget - Soft delete by ID or fingerprint
+- Replaced deprecated @app.on_event with modern lifespan context manager
+- Comprehensive tests for idempotency, merge behavior, soft delete
+- All 46 tests passing with zero deprecation warnings
+
+**Files Modified:**
+- `services/memory/main.py` - Added memories table, endpoints, fingerprint logic, lifespan
+- `services/online/main.py` - Replaced deprecated on_event with lifespan
+- `tests/test_memory_service.py` - Added 4 new tests for Phase 2 functionality
+
+## Phase 2 Schema Reference
 ```sql
 CREATE TABLE memories (
     id INTEGER PRIMARY KEY,
@@ -119,7 +153,39 @@ Response: `{"status": "forgotten", "fingerprint": "..."}`
 - `services/memory/main.py` - Add memories table, endpoints, fingerprint logic, transaction handling
 - `tests/test_memory_service.py` - Add tests for upsert idempotency, merge behavior, forget
 
-## Phase 3: Memory Extraction (LLM Proposes, Service Validates)
+## ✅ Phase 3: Memory Extraction (COMPLETE - Rules-First)
+
+**Goal:** Extract important facts from events using conservative patterns
+
+**Implemented:**
+- extraction_rules.yaml with 9 rule categories
+- RuleExtractor class with pattern matching, validation, deduplication
+- POST /v1/memories/extract endpoint
+- Returns candidates (proposed) and upserted (stored) for auditability
+- Automatic person_id resolution if not provided
+- Validation: max 500 chars, reject generic phrases, URL rules
+- Template-based text formatting for consistency
+- Pattern categories:
+  - preferred_name (importance 0.9): "call me X", "I go by X"
+  - personal facts (0.7): "my name is X", "I live in X"
+  - preferences (0.6): "I like/hate X", "I prefer X"
+  - goals (0.6): "I want to X", "my goal is X"
+  - projects (0.7): "I'm working on X" (URLs allowed)
+  - reminders (0.55): "remind me to X"
+- Comprehensive test coverage
+- All 47 tests passing
+
+**Files Created:**
+- `services/memory/extraction_rules.yaml` - Pattern definitions
+- `services/memory/extraction.py` - RuleExtractor implementation
+
+**Files Modified:**
+- `services/memory/main.py` - Added extraction endpoint
+- `tests/test_memory_service.py` - Added extraction test
+
+**Future Enhancement:**
+- LLM fallback behind use_llm flag for complex cases
+- Strict JSON validation when LLM is added
 
 **Goal:** Extract important facts from events (LLM can't be trusted with facts)
 
@@ -201,11 +267,13 @@ results = {
 **✅ Completed:**
 - PersonalityRenderer task routing refactor (explicit task_id parameter)
 - Phase 1: Identity resolution with cathyAI-identity-db integration
+- Phase 2: Curated memories with fingerprint-based upsert, soft delete, transactional merge
+- Phase 3: Rule-based memory extraction (rules-first, LLM fallback later)
 
-**Next PR (Phase 2):**
-- Curated memories table with fingerprint-based upsert
-- Soft delete support
-- Upsert, list, forget endpoints
+**Next PR (Phase 4 or LLM Enhancement):**
+- Option A: Add LLM fallback to extraction (use_llm flag, strict JSON validation)
+- Option B: Vector search with Qdrant integration
+- Option C: Enhanced query API (curated + semantic + recent + sources)
 
 **Future PRs:**
 1. Phase 3: Memory extraction (rule-based + LLM validation)

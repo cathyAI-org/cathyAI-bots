@@ -12,15 +12,17 @@ import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from extraction import RuleExtractor
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown."""
-    global IDENTITY_API_URL, IDENTITY_API_KEY, IDENTITY_API_TIMEOUT_S
+    global IDENTITY_API_URL, IDENTITY_API_KEY, IDENTITY_API_TIMEOUT_S, EXTRACTOR
     IDENTITY_API_URL = os.getenv("IDENTITY_API_URL")
     IDENTITY_API_KEY = os.getenv("IDENTITY_API_KEY")
     IDENTITY_API_TIMEOUT_S = float(os.getenv("IDENTITY_API_TIMEOUT_S", "3.0"))
+    EXTRACTOR = RuleExtractor()
     init_db()
     print(f"Memory service started (identity={'enabled' if IDENTITY_API_URL else 'disabled'})")
     yield
@@ -101,8 +103,30 @@ class MemoryForgetResponse(BaseModel):
     fingerprint: Optional[str]
 
 
+class ExtractionRequest(BaseModel):
+    """Memory extraction request."""
+    source: str = Field(..., description="Event source")
+    external_user_id: str = Field(..., description="External user ID")
+    person_id: Optional[str] = Field(None, description="Person ID (resolved if not provided)")
+    char_id: Optional[str] = Field(None, description="Character ID")
+    scope: str = Field("character", description="Scope")
+    room_id: Optional[str] = Field(None, description="Room ID")
+    event_ids: Optional[List[int]] = Field(None, description="Source event IDs")
+    messages: List[Dict[str, str]] = Field(..., description="Messages to extract from")
+
+
+class ExtractionResponse(BaseModel):
+    """Memory extraction response."""
+    status: str
+    person_id: Optional[str]
+    candidates: List[Dict[str, Any]]
+    upserted: List[Dict[str, Any]]
+    errors: List[str]
+
+
 TYPE_ALLOWLIST = {"preference", "fact", "goal", "relationship", "project", "open_loop"}
 SCOPE_ALLOWLIST = {"character", "person_global", "room", "session"}
+EXTRACTOR = None
 
 
 def init_db():
@@ -621,6 +645,67 @@ async def forget_memory(req: MemoryForgetRequest):
         return MemoryForgetResponse(status="forgotten", fingerprint=fingerprint)
     finally:
         conn.close()
+
+
+@app.post("/v1/memories/extract", response_model=ExtractionResponse)
+async def extract_memories(req: ExtractionRequest):
+    """Extract memories from messages using rules.
+    
+    :param req: Extraction request
+    :type req: ExtractionRequest
+    :return: Extraction response
+    :rtype: ExtractionResponse
+    """
+    # Resolve person_id if not provided
+    person_id = req.person_id
+    if not person_id:
+        person_id = await resolve_or_create_person_id(req.source, req.external_user_id)
+    
+    # Extract candidates
+    candidates_list = EXTRACTOR.extract(req.messages)
+    
+    # Upsert each candidate
+    upserted = []
+    errors = []
+    
+    for cand in candidates_list:
+        if not person_id:
+            errors.append(f"Cannot upsert without person_id: {cand.text}")
+            continue
+        
+        try:
+            upsert_req = MemoryUpsertRequest(
+                person_id=person_id,
+                char_id=req.char_id,
+                scope=req.scope,
+                type=cand.type,
+                text=cand.text,
+                importance=cand.importance,
+                source_event_ids=req.event_ids,
+                metadata={"extractor": "rules", **cand.metadata},
+            )
+            
+            result = await upsert_memory(upsert_req)
+            upserted.append({
+                "id": result.id,
+                "fingerprint": result.fingerprint,
+                "created": result.created,
+            })
+        except Exception as e:
+            errors.append(f"Upsert failed for '{cand.text}': {e!r}")
+    
+    return ExtractionResponse(
+        status="ok",
+        person_id=person_id,
+        candidates=[{
+            "type": c.type,
+            "text": c.text,
+            "importance": c.importance,
+            "metadata": c.metadata,
+        } for c in candidates_list],
+        upserted=upserted,
+        errors=errors,
+    )
 
 
 if __name__ == "__main__":

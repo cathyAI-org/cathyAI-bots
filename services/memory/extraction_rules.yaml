@@ -1,0 +1,112 @@
+# Memory Extraction Rules
+# Conservative patterns for high-precision fact extraction
+
+rules:
+  # Preferred name / how to address user (high value)
+  - name: preferred_name
+    type: preference
+    importance: 0.9
+    patterns:
+      - '\bcall me\s+(?P<name>[A-Za-z][A-Za-z''\- ]{0,40})\b'
+      - '\bplease call me\s+(?P<name>[A-Za-z][A-Za-z''\- ]{0,40})\b'
+      - '\bi go by\s+(?P<name>[A-Za-z][A-Za-z''\- ]{0,40})\b'
+      - '\bmy nickname is\s+(?P<name>[A-Za-z][A-Za-z''\- ]{0,40})\b'
+    template: "Call me {name}."
+
+  # Personal facts (medium-high)
+  - name: personal_name
+    type: fact
+    importance: 0.7
+    patterns:
+      - '\bmy name is\s+(?P<name>[A-Za-z][A-Za-z''\- ]{0,40})\b'
+    template: "My name is {name}."
+
+  - name: location
+    type: fact
+    importance: 0.7
+    patterns:
+      - '\bi live in\s+(?P<place>[^.?!]{2,60})'
+      - '\bi''m in\s+(?P<place>[^.?!]{2,60})'
+    template: "I live in {place}."
+
+  # Preferences (likes/dislikes) (medium)
+  - name: likes
+    type: preference
+    importance: 0.6
+    patterns:
+      - '\bi (really )?(like|love)\s+(?P<thing>[^.?!]{2,80})'
+    template: "I {verb} {thing}."
+
+  - name: dislikes
+    type: preference
+    importance: 0.6
+    patterns:
+      - '\bi (really )?(hate|dislike)\s+(?P<thing>[^.?!]{2,80})'
+    template: "I {verb} {thing}."
+
+  - name: prefer
+    type: preference
+    importance: 0.6
+    patterns:
+      - '\bi prefer\s+(?P<thing>[^.?!]{2,80})'
+    template: "I prefer {thing}."
+
+  - name: please_dont
+    type: preference
+    importance: 0.6
+    patterns:
+      - '\bplease\s+(don''?t|do not)\s+(?P<thing>[^.?!]{2,80})'
+    template: "Please don't {thing}."
+
+  # Goals / intentions (medium)
+  - name: goals
+    type: goal
+    importance: 0.6
+    patterns:
+      - '\bi want to\s+(?P<goal>[^.?!]{3,120})'
+      - '\bi''m trying to\s+(?P<goal>[^.?!]{3,120})'
+      - '\bmy goal is to\s+(?P<goal>[^.?!]{3,120})'
+    template: "Goal: {goal}."
+
+  # Projects (URLs allowed)
+  - name: projects
+    type: project
+    importance: 0.7
+    patterns:
+      - '\bi''?m working on\s+(?P<p>[^.?!]{3,140})'
+      - '\bmy project is\s+(?P<p>[^.?!]{3,140})'
+      - '\bwe are building\s+(?P<p>[^.?!]{3,140})'
+    template: "Project: {p}."
+
+  # Open loops / reminders (lower, but helpful)
+  - name: reminders
+    type: open_loop
+    importance: 0.55
+    patterns:
+      - '\bremind me to\s+(?P<task>[^.?!]{3,120})'
+      - '\bdon''?t let me forget to\s+(?P<task>[^.?!]{3,120})'
+    template: "Open loop: {task}."
+
+# Generic phrases to reject (too low signal)
+reject_phrases:
+  - "ok"
+  - "okay"
+  - "sure"
+  - "thanks"
+  - "thank you"
+  - "got it"
+  - "understood"
+  - "yes"
+  - "no"
+  - "maybe"
+  - "i see"
+  - "alright"
+
+# Validation rules
+validation:
+  max_text_length: 500
+  allow_urls_for_types:
+    - project
+  url_patterns:
+    - 'https?://'
+    - 'www\.'

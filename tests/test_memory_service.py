@@ -271,3 +271,48 @@ def test_memory_source_merge():
             memories = list_resp.json()["memories"]
             assert len(memories) == 1
             assert sorted(memories[0]["sources"]) == [1, 2, 3]
+
+
+def test_memory_extraction():
+    """Test memory extraction from messages."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        import main
+        main.DB_PATH = Path(tmpdir) / "test.db"
+        main.init_db()
+        
+        from fastapi.testclient import TestClient
+        with TestClient(main.app) as client:
+            # Extract memories from messages
+            extract_resp = client.post(
+                "/v1/memories/extract",
+                json={
+                    "source": "test",
+                    "external_user_id": "test_user",
+                    "person_id": "person_123",
+                    "char_id": "delilah",
+                    "scope": "character",
+                    "messages": [
+                        {"role": "user", "content": "Call me Sam."},
+                        {"role": "user", "content": "I live in Seattle."},
+                    ],
+                },
+            )
+            assert extract_resp.status_code == 200
+            data = extract_resp.json()
+            assert data["status"] == "ok"
+            assert len(data["candidates"]) >= 2
+            assert len(data["upserted"]) >= 2
+            
+            # Verify memories were stored
+            list_resp = client.get(
+                "/v1/memories/list",
+                params={"person_id": "person_123"},
+            )
+            memories = list_resp.json()["memories"]
+            assert len(memories) >= 2
+            texts = [m["text"] for m in memories]
+            assert any("Sam" in t for t in texts)
+            assert any("Seattle" in t for t in texts)
