@@ -1,41 +1,48 @@
 # Memory/RAG Enhancement Roadmap
 
-## Current State (MVP)
+## Current State
 
 **What Works:**
 - ✅ Event storage in sqlite (append-only log)
 - ✅ Query by person_id, char_id, filters
 - ✅ Returns most recent k events
 - ✅ Health check endpoint
+- ✅ **Phase 1 Complete:** Identity resolution with cathyAI-identity-db integration
+  - Automatic external_user_id → person_id resolution
+  - Creates new person_id on 404 via POST /identity/link
+  - Fail-open behavior (NULL person_id + metadata flag if API down)
+  - Consistent ID normalization (matrix:, chainlit:, discord: prefixes)
 
 **What's Missing:**
-- ❌ Identity resolution (person_id must be provided by caller)
-- ❌ Vector embeddings / semantic search
 - ❌ Curated memories (important facts extraction)
+- ❌ Vector embeddings / semantic search
 - ❌ Importance scoring
 - ❌ Memory consolidation/distillation
 
-## Phase 1: Identity Resolution (Minimal)
+## ✅ Phase 1: Identity Resolution (COMPLETE)
 
 **Goal:** Automatically resolve external_user_id → person_id
 
-**Changes:**
-1. Add environment variables:
-   - `IDENTITY_API_URL`
-   - `IDENTITY_API_KEY`
+**Implemented:**
+- Environment variables: IDENTITY_API_URL, IDENTITY_API_KEY, IDENTITY_API_TIMEOUT_S
+- normalize_external_id() for consistent formatting
+- resolve_or_create_person_id() with cathyAI-identity-db API:
+  - GET /identity/resolve?external_id=... (200 or 404)
+  - POST /identity/link with new person_id on 404
+  - x-api-key authentication
+  - Fail-open: stores NULL person_id + metadata flag if API down
+- Updated docker-compose.yml and services/.env.template
+- All 42 tests passing
 
-2. Update `/v1/events/ingest`:
-   - If `person_id` is None, call identity API
-   - Store resolved person_id with event
-
-**Files to modify:**
-- `services/memory/main.py` - Add identity resolution
-- `docker-compose.yml` - Add env vars
-- `.env.template` - Document identity API config
+**Files Modified:**
+- `services/memory/main.py`
+- `docker-compose.yml`
+- `services/.env.template`
+- `README.md`
 
 ## Phase 2: Curated Memories Table
 
-**Goal:** Store important facts separately from event log
+**Goal:** Store important facts separately from event log with idempotent upsert
 
 **Schema:**
 ```sql
@@ -43,41 +50,104 @@ CREATE TABLE memories (
     id INTEGER PRIMARY KEY,
     person_id TEXT NOT NULL,
     char_id TEXT,
-    type TEXT,  -- preference, fact, goal, relationship
+    scope TEXT NOT NULL DEFAULT 'character',  -- character, person_global, room, session
+    type TEXT NOT NULL,  -- preference, fact, goal, relationship, project, open_loop
     text TEXT NOT NULL,
     importance FLOAT DEFAULT 0.5,
+    fingerprint TEXT UNIQUE,  -- sha256(person_id|scope|char_id_or_empty|type|normalized_text)
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    source_event_ids TEXT,  -- JSON array
-    pinned BOOLEAN DEFAULT 0,
-    ttl_days INTEGER
+    deleted_at TEXT,  -- soft delete for auditability
+    source_event_ids TEXT,  -- JSON array (merged on upsert)
+    metadata TEXT  -- JSON
 );
+
+CREATE INDEX idx_mem_person_char_deleted ON memories(person_id, char_id, deleted_at);
+CREATE INDEX idx_mem_person_scope_deleted ON memories(person_id, scope, deleted_at);
+CREATE INDEX idx_mem_importance_updated ON memories(importance, updated_at);
 ```
 
+**Key Features:**
+- Fingerprint-based upsert (idempotent)
+- Soft delete (deleted_at) for auditability
+- Importance scoring for retrieval ranking
+- Scope field (character/person_global/room/session) for explicit context
+- Type allowlist enforcement (preference, fact, goal, relationship, project, open_loop)
+- Transactional upsert with source_event_ids merge and importance update
+
+**Fingerprint Computation:**
+```python
+sha256(person_id | scope | char_id_or_empty | type | normalized_text)
+# normalized_text: strip() + collapse whitespace + lowercase for fingerprint only
+# Store original-cased text in text field
+```
+
+**Upsert Behavior (in transaction):**
+- If fingerprint exists: merge source_event_ids (set-union), update importance (max), bump updated_at
+- If new: insert with provided values
+
 **New Endpoints:**
-- `POST /v1/memories/upsert` - Add/update curated memory
-- `GET /v1/memories/list` - List memories for person/char
 
-**Files to create/modify:**
-- `services/memory/main.py` - Add memories table and endpoints
+`POST /v1/memories/upsert`
+```json
+{
+  "person_id": "uuid",
+  "char_id": "delilah",
+  "scope": "character",
+  "type": "preference",
+  "text": "Call me Sam.",
+  "importance": 0.8,
+  "source_event_ids": [101, 103],
+  "metadata": {"source": "extractor_rules_v1"}
+}
+```
+Response: `{"status": "upserted", "id": 12, "fingerprint": "sha256...", "created": false}`
 
-## Phase 3: Memory Extraction (Safe JSON-only)
+`GET /v1/memories/list?person_id=...&char_id=...&scope=...&include_deleted=false`
+- Returns non-deleted by default
+- Supports filtering by person_id, char_id, scope
 
-**Goal:** Extract important facts from events
+`POST /v1/memories/forget`
+```json
+{"fingerprint": "sha256...", "reason": "user_request"}
+# OR
+{"id": 123, "reason": "user_request"}
+```
+Response: `{"status": "forgotten", "fingerprint": "..."}`
 
-**Approach:**
-- LLM outputs JSON only: `{"memories": [{"type": "preference", "text": "...", "importance": 0.8}]}`
-- Service validates schema before storing
+**Files to modify:**
+- `services/memory/main.py` - Add memories table, endpoints, fingerprint logic, transaction handling
+- `tests/test_memory_service.py` - Add tests for upsert idempotency, merge behavior, forget
+
+## Phase 3: Memory Extraction (LLM Proposes, Service Validates)
+
+**Goal:** Extract important facts from events (LLM can't be trusted with facts)
+
+**Two-Step Process:**
+1. **LLM Output:** Strict JSON only
+   ```json
+   {"memories": [{"type": "preference", "text": "...", "importance": 0.8}]}
+   ```
+2. **Service Validation:**
+   - Parse JSON (reject if invalid)
+   - Validate types in allowlist (preference, fact, goal, relationship, project, open_loop)
+   - Normalize text (trim, collapse whitespace)
+   - Reject too-long strings (>500 chars)
+   - Reject memories containing URLs (unless type == project)
+   - Compute fingerprint and upsert
+   - Return 200 with `{memories: [], error: "invalid_schema"}` on failure (don't blow up)
+
+**Implementation Strategy:**
+- Start with rule-based extraction (regex for obvious patterns)
+- Fall back to LLM for complex cases
 - Never trust LLM to write SQL or execute code
 
-**Options:**
-1. Rule-based extraction (regex patterns for obvious facts)
-2. LLM extraction with strict JSON schema validation
-3. Hybrid: rules first, LLM for complex cases
+**New Endpoint:**
+- `POST /v1/memories/extract` - Extract from event(s), returns candidate memories
 
 **Files to create:**
-- `services/memory/extraction.py` - Memory extraction logic
-- Add endpoint: `POST /v1/memories/extract` - Extract from event(s)
+- `services/memory/extraction.py` - Extraction logic (rules + LLM fallback)
+- Update `services/memory/main.py` - Add extraction endpoint
 
 ## Phase 4: Vector Search (Optional)
 
@@ -95,39 +165,63 @@ CREATE TABLE memories (
 
 ## Phase 5: Enhanced Query API
 
-**Goal:** Return "curated + relevant + recent" instead of just "recent k"
+**Goal:** Return "curated + relevant + recent" with per-item source citations
 
 **New query behavior:**
 ```python
 results = {
-    "curated": top_memories_by_importance(person_id, char_id),
-    "semantic": vector_search(query, person_id, char_id) if query else [],
-    "recent": last_n_events(person_id, char_id, n=5)
+    "curated": [
+        {"id": 12, "type": "preference", "text": "Call me Sam.", 
+         "importance": 0.8, "sources": [101, 103]}
+    ],
+    "semantic": [
+        {"chunk_id": "...", "text": "...", "score": 0.72, 
+         "source_event_id": 98}
+    ],
+    "recent": [...],
+    "ts": "..."
 }
 ```
+
+**Search Order:**
+1. Curated memories (importance + recency)
+2. Semantic chunks (vector search)
+3. Recent events (last N)
+
+**Benefits:**
+- Prevents "you told me" hallucinations (per-item sources for citation)
+- Prioritizes important facts over recency
+- Person-aware filtering (no memory leakage)
 
 **Files to modify:**
 - `services/memory/main.py` - Update `/v1/memory/query` logic
 
 ## Implementation Order
 
-**Immediate (this PR):**
-- ✅ Fix PersonalityRenderer task routing for news
+**✅ Completed:**
+- PersonalityRenderer task routing refactor (explicit task_id parameter)
+- Phase 1: Identity resolution with cathyAI-identity-db integration
 
-**Next PR (Identity Resolution):**
-1. Add identity API integration to memory service
-2. Test with Matrix events
+**Next PR (Phase 2):**
+- Curated memories table with fingerprint-based upsert
+- Soft delete support
+- Upsert, list, forget endpoints
 
 **Future PRs:**
-1. Curated memories table + upsert endpoint
-2. Memory extraction (rule-based first)
-3. Vector search (Qdrant)
-4. Enhanced query API
+1. Phase 3: Memory extraction (rule-based + LLM validation)
+2. Phase 4: Vector search (Qdrant integration)
+3. Phase 5: Enhanced query API (curated + semantic + recent + sources)
 
 ## Notes
 
 - Keep memory service stateless (no in-memory caches)
-- All operations should be idempotent where possible
-- Use transactions for multi-step operations
+- All operations idempotent where possible (fingerprint-based upsert)
+- Use transactions for multi-step operations (upsert + merge)
 - Log all identity resolutions for debugging
-- Consider privacy: memories should be deletable
+- Privacy: soft delete (deleted_at) for auditability, hard delete available if needed
+- LLM constraint: Only proposes candidate memories as JSON, service validates and stores
+- Person-aware filtering prevents memory leakage across users
+- Type allowlist: preference, fact, goal, relationship, project, open_loop
+- Scope values: character (default), person_global, room, session
+- Fingerprint normalization: strip + collapse whitespace + lowercase (store original text)
+- URL rejection: Reject memories with URLs unless type == project

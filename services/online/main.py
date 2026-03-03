@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from contextlib import asynccontextmanager
 import feedparser
 import httpx
 import sqlite3
@@ -12,7 +13,20 @@ import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-app = FastAPI(title="catcord-online", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown."""
+    global ALLOWLIST_ROOMS
+    allowlist_str = os.getenv("ONLINE_ALLOWLIST_ROOMS", "")
+    if allowlist_str:
+        ALLOWLIST_ROOMS = set(r.strip() for r in allowlist_str.split(",") if r.strip())
+    init_db()
+    print(f"Online service started (allowlist={len(ALLOWLIST_ROOMS)} rooms)")
+    yield
+
+
+app = FastAPI(title="catcord-online", version="1.0.0", lifespan=lifespan)
 
 DB_PATH = Path("/state/cache.sqlite3")
 ALLOWLIST_ROOMS = set()
@@ -54,23 +68,6 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-
-
-@app.on_event("startup")
-async def startup():
-    """Initialize service on startup.
-    
-    :return: None
-    :rtype: None
-    """
-    global ALLOWLIST_ROOMS
-    
-    allowlist_str = os.getenv("ONLINE_ALLOWLIST_ROOMS", "")
-    if allowlist_str:
-        ALLOWLIST_ROOMS = set(r.strip() for r in allowlist_str.split(",") if r.strip())
-    
-    init_db()
-    print(f"Online service started (allowlist={len(ALLOWLIST_ROOMS)} rooms)")
 
 
 @app.get("/health")
