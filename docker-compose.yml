@@ -62,7 +62,7 @@ services:
     image: catcord/cleaner:latest
     container_name: cleaner_event
     restart: unless-stopped
-    command: ["python", "-u", "event_main.py"]
+    command: ["python", "-u", "/app/event_main.py"]
     volumes:
       - ./cleaner/config.yaml:/config/config.yaml:ro
       - /var/lib/catcord/cleaner:/state:rw
