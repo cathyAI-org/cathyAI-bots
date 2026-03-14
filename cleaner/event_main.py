@@ -1,9 +1,17 @@
 import asyncio
-from mautrix.types import EventType, MessageEvent
+from datetime import datetime
+from mautrix.types import (
+    EventType,
+    MessageEvent,
+    Filter,
+    EventFilter,
+    RoomFilter,
+    RoomEventFilter,
+)
 from catcord_bots.config import load_yaml, FrameworkConfig
 from catcord_bots.matrix import create_client, whoami
 from catcord_bots.invites import join_all_invites
-from cleaner.cleaner import (
+from cleaner import (
     init_db, log_upload, get_disk_usage_ratio, Policy,
     run_pressure, PersonalityConfig
 )
@@ -15,12 +23,17 @@ conn = None
 async def on_message(event: MessageEvent, session, cfg, policy, ai_cfg):
     """Handle media upload events."""
     global conn
-    if event.content.msgtype not in ("m.image", "m.video", "m.file", "m.audio"):
+
+    if str(event.content.msgtype) not in ("m.image", "m.video", "m.file", "m.audio"):
         return
-    
-    await log_upload(conn, event)
-    
+
     used = get_disk_usage_ratio("/srv/media")
+    print(
+        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+        f"Media event seen, logging upload. Current disk usage: {used:.1%}"
+    )
+    await log_upload(conn, event)
+
     if used >= policy.pressure:
         print(f"Pressure detected: {used:.1%} >= {policy.pressure:.1%}")
         await run_pressure(
@@ -84,12 +97,39 @@ async def main_async(config_path: str):
         )
         
         session.client.add_event_handler(
+            EventType.ROOM_MESSAGE,
             lambda evt: on_message(evt, session, cfg, policy, ai_cfg),
-            EventType.ROOM_MESSAGE
+            wait_sync=True,
         )
-        
+
+        sync_filter = Filter(
+            account_data=EventFilter(not_types=["*"]),
+            room=RoomFilter(
+                account_data=RoomEventFilter(not_types=["*"]),
+                timeline=RoomEventFilter(types=[EventType.ROOM_MESSAGE]),
+            ),
+        )
+
+        filter_id = await session.client.create_filter(sync_filter)
+
         print("Listening for media uploads...")
-        await session.client.sync_forever(timeout=30000, full_state=True)
+        since = None
+        while True:
+            data = await session.client.sync(
+                since=since,
+                timeout=30000,
+                filter_id=filter_id,
+                full_state=False,
+            )
+
+            data.pop("account_data", None)
+            rooms = data.get("rooms") or {}
+            for section in ("join", "invite", "leave"):
+                for room in (rooms.get(section) or {}).values():
+                    room.pop("account_data", None)
+
+            session.client.handle_sync(data)
+            since = data.get("next_batch")
     finally:
         if conn:
             conn.close()
