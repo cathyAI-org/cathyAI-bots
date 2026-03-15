@@ -131,13 +131,13 @@ EXTRACTOR = None
 
 def init_db():
     """Initialize memory database.
-    
+
     :return: None
     :rtype: None
     """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
-    
+
     # Events table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS events (
@@ -164,7 +164,7 @@ def init_db():
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_ts ON events(ts)
     """)
-    
+
     # Memories table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS memories (
@@ -184,25 +184,25 @@ def init_db():
         )
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_mem_person_char_deleted 
+        CREATE INDEX IF NOT EXISTS idx_mem_person_char_deleted
         ON memories(person_id, char_id, deleted_at)
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_mem_person_scope_deleted 
+        CREATE INDEX IF NOT EXISTS idx_mem_person_scope_deleted
         ON memories(person_id, scope, deleted_at)
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_mem_importance_updated 
+        CREATE INDEX IF NOT EXISTS idx_mem_importance_updated
         ON memories(importance, updated_at)
     """)
-    
+
     conn.commit()
     conn.close()
 
 
 def normalize_external_id(source: str, external_user_id: str) -> str:
     """Normalize external ID to consistent format.
-    
+
     :param source: Source system
     :type source: str
     :param external_user_id: External user ID
@@ -227,7 +227,7 @@ async def resolve_or_create_person_id(
     source: str, external_user_id: str, preferred_name: Optional[str] = None
 ) -> Optional[str]:
     """Resolve or create person ID via identity API.
-    
+
     :param source: Source system
     :type source: str
     :param external_user_id: External user ID
@@ -239,14 +239,14 @@ async def resolve_or_create_person_id(
     """
     if not IDENTITY_API_URL or not IDENTITY_API_KEY:
         return None
-    
+
     external_id = normalize_external_id(source, external_user_id)
     if not external_id:
         return None
-    
+
     headers = {"x-api-key": IDENTITY_API_KEY}
     timeout = httpx.Timeout(IDENTITY_API_TIMEOUT_S)
-    
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             # Try resolve
@@ -255,16 +255,16 @@ async def resolve_or_create_person_id(
                 params={"external_id": external_id},
                 headers=headers,
             )
-            
+
             if resp.status_code == 200:
                 person_id = resp.json().get("person_id")
                 print(f"Resolved {external_id} -> {person_id}")
                 return person_id
-            
+
             if resp.status_code != 404:
                 print(f"Identity resolve error {resp.status_code} for {external_id}")
                 return None
-            
+
             # Unknown -> create + link
             new_person_id = str(uuid.uuid4())
             body = {
@@ -273,20 +273,20 @@ async def resolve_or_create_person_id(
             }
             if preferred_name:
                 body["preferred_name"] = preferred_name
-            
+
             link_resp = await client.post(
                 f"{IDENTITY_API_URL}/identity/link",
                 json=body,
                 headers=headers,
             )
-            
+
             if link_resp.status_code == 200:
                 print(f"Created {external_id} -> {new_person_id}")
                 return new_person_id
-            
+
             print(f"Identity link error {link_resp.status_code} for {external_id}")
             return None
-            
+
     except Exception as e:
         print(f"Identity resolution failed for {external_id}: {e!r}")
         return None
@@ -294,7 +294,7 @@ async def resolve_or_create_person_id(
 
 def normalize_text_for_fingerprint(text: str) -> str:
     """Normalize text for fingerprint computation.
-    
+
     :param text: Original text
     :type text: str
     :return: Normalized text
@@ -309,7 +309,7 @@ def compute_memory_fingerprint(
     person_id: str, scope: str, char_id: Optional[str], type: str, text: str
 ) -> str:
     """Compute memory fingerprint for idempotent upsert.
-    
+
     :param person_id: Person ID
     :type person_id: str
     :param scope: Scope
@@ -332,7 +332,7 @@ def compute_memory_fingerprint(
 @app.get("/health")
 async def health():
     """Health check endpoint.
-    
+
     :return: Health status
     :rtype: Dict[str, str]
     """
@@ -342,7 +342,7 @@ async def health():
 @app.post("/v1/events/ingest", response_model=IngestResponse)
 async def ingest_event(req: IngestRequest):
     """Ingest event into memory store.
-    
+
     :param req: Ingest request
     :type req: IngestRequest
     :return: Ingest response
@@ -351,14 +351,14 @@ async def ingest_event(req: IngestRequest):
     # Resolve person_id if not provided
     person_id = req.person_id
     metadata = req.metadata or {}
-    
+
     if not person_id:
         person_id = await resolve_or_create_person_id(
             req.source, req.external_user_id
         )
         if not person_id:
             metadata["identity_resolution"] = "failed"
-    
+
     conn = sqlite3.connect(DB_PATH)
     try:
         cursor = conn.execute("""
@@ -383,14 +383,14 @@ async def ingest_event(req: IngestRequest):
         event_id = cursor.lastrowid
     finally:
         conn.close()
-    
+
     return IngestResponse(event_id=event_id, person_id=person_id)
 
 
 @app.post("/v1/memory/query", response_model=QueryResponse)
 async def query_memory(req: QueryRequest):
     """Query memory store.
-    
+
     :param req: Query request
     :type req: QueryRequest
     :return: Query response
@@ -400,17 +400,17 @@ async def query_memory(req: QueryRequest):
     try:
         where_clauses = []
         params = []
-        
+
         if req.person_id:
             where_clauses.append("person_id = ?")
             params.append(req.person_id)
-        
+
         if req.char_id:
             where_clauses.append("char_id = ?")
             params.append(req.char_id)
-        
+
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-        
+
         cursor = conn.execute(f"""
             SELECT id, source, external_user_id, person_id, room_id, session_id,
                    char_id, role, content, ts, metadata
@@ -419,7 +419,7 @@ async def query_memory(req: QueryRequest):
             ORDER BY ts DESC
             LIMIT ?
         """, params + [req.k])
-        
+
         results = []
         for row in cursor.fetchall():
             results.append({
@@ -437,14 +437,14 @@ async def query_memory(req: QueryRequest):
             })
     finally:
         conn.close()
-    
+
     return QueryResponse(results=results)
 
 
 @app.post("/v1/memories/upsert", response_model=MemoryUpsertResponse)
 async def upsert_memory(req: MemoryUpsertRequest):
     """Upsert curated memory (idempotent via fingerprint).
-    
+
     :param req: Upsert request
     :type req: MemoryUpsertRequest
     :return: Upsert response
@@ -455,33 +455,33 @@ async def upsert_memory(req: MemoryUpsertRequest):
         raise ValueError(f"Invalid type: {req.type}. Must be one of {TYPE_ALLOWLIST}")
     if req.scope not in SCOPE_ALLOWLIST:
         raise ValueError(f"Invalid scope: {req.scope}. Must be one of {SCOPE_ALLOWLIST}")
-    
+
     # Compute fingerprint
     fingerprint = compute_memory_fingerprint(
         req.person_id, req.scope, req.char_id, req.type, req.text
     )
-    
+
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.execute("BEGIN")
-        
+
         # Check if exists
         cursor = conn.execute(
             "SELECT id, importance, source_event_ids FROM memories WHERE fingerprint = ?",
             (fingerprint,)
         )
         existing = cursor.fetchone()
-        
+
         now = datetime.now(timezone.utc).isoformat()
         source_ids = req.source_event_ids or []
-        
+
         if existing:
             # Upsert: merge source_event_ids, update importance (max), bump updated_at
             mem_id, old_importance, old_source_ids_json = existing
             old_source_ids = json.loads(old_source_ids_json) if old_source_ids_json else []
             merged_source_ids = sorted(set(old_source_ids + source_ids))
             new_importance = max(old_importance, req.importance)
-            
+
             conn.execute("""
                 UPDATE memories
                 SET importance = ?, source_event_ids = ?, updated_at = ?, metadata = ?
@@ -516,7 +516,7 @@ async def upsert_memory(req: MemoryUpsertRequest):
             ))
             mem_id = cursor.lastrowid
             created = True
-        
+
         conn.commit()
         return MemoryUpsertResponse(
             status="upserted",
@@ -536,7 +536,7 @@ async def list_memories(
     include_deleted: bool = False,
 ):
     """List curated memories.
-    
+
     :param person_id: Filter by person ID
     :type person_id: Optional[str]
     :param char_id: Filter by character ID
@@ -552,24 +552,24 @@ async def list_memories(
     try:
         where_clauses = []
         params = []
-        
+
         if person_id:
             where_clauses.append("person_id = ?")
             params.append(person_id)
-        
+
         if char_id:
             where_clauses.append("char_id = ?")
             params.append(char_id)
-        
+
         if scope:
             where_clauses.append("scope = ?")
             params.append(scope)
-        
+
         if not include_deleted:
             where_clauses.append("deleted_at IS NULL")
-        
+
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-        
+
         cursor = conn.execute(f"""
             SELECT id, person_id, char_id, scope, type, text, importance,
                    fingerprint, created_at, updated_at, deleted_at,
@@ -578,7 +578,7 @@ async def list_memories(
             WHERE {where_sql}
             ORDER BY importance DESC, updated_at DESC
         """, params)
-        
+
         results = []
         for row in cursor.fetchall():
             results.append({
@@ -596,7 +596,7 @@ async def list_memories(
                 "sources": json.loads(row[11]) if row[11] else [],
                 "metadata": json.loads(row[12]) if row[12] else None,
             })
-        
+
         return {"memories": results}
     finally:
         conn.close()
@@ -605,7 +605,7 @@ async def list_memories(
 @app.post("/v1/memories/forget", response_model=MemoryForgetResponse)
 async def forget_memory(req: MemoryForgetRequest):
     """Soft delete memory by ID or fingerprint.
-    
+
     :param req: Forget request
     :type req: MemoryForgetRequest
     :return: Forget response
@@ -613,11 +613,11 @@ async def forget_memory(req: MemoryForgetRequest):
     """
     if not req.id and not req.fingerprint:
         raise ValueError("Must provide either id or fingerprint")
-    
+
     conn = sqlite3.connect(DB_PATH)
     try:
         now = datetime.now(timezone.utc).isoformat()
-        
+
         if req.fingerprint:
             cursor = conn.execute(
                 "UPDATE memories SET deleted_at = ? WHERE fingerprint = ? AND deleted_at IS NULL",
@@ -636,12 +636,12 @@ async def forget_memory(req: MemoryForgetRequest):
             )
             fp_row = fp_cursor.fetchone()
             fingerprint = fp_row[0] if fp_row else None
-        
+
         conn.commit()
-        
+
         if cursor.rowcount == 0:
             return MemoryForgetResponse(status="not_found", fingerprint=fingerprint)
-        
+
         return MemoryForgetResponse(status="forgotten", fingerprint=fingerprint)
     finally:
         conn.close()
@@ -650,7 +650,7 @@ async def forget_memory(req: MemoryForgetRequest):
 @app.post("/v1/memories/extract", response_model=ExtractionResponse)
 async def extract_memories(req: ExtractionRequest):
     """Extract memories from messages using rules.
-    
+
     :param req: Extraction request
     :type req: ExtractionRequest
     :return: Extraction response
@@ -660,19 +660,19 @@ async def extract_memories(req: ExtractionRequest):
     person_id = req.person_id
     if not person_id:
         person_id = await resolve_or_create_person_id(req.source, req.external_user_id)
-    
+
     # Extract candidates
     candidates_list = EXTRACTOR.extract(req.messages)
-    
+
     # Upsert each candidate
     upserted = []
     errors = []
-    
+
     for cand in candidates_list:
         if not person_id:
             errors.append(f"Cannot upsert without person_id: {cand.text}")
             continue
-        
+
         try:
             upsert_req = MemoryUpsertRequest(
                 person_id=person_id,
@@ -684,7 +684,7 @@ async def extract_memories(req: ExtractionRequest):
                 source_event_ids=req.event_ids,
                 metadata={"extractor": "rules", **cand.metadata},
             )
-            
+
             result = await upsert_memory(upsert_req)
             upserted.append({
                 "id": result.id,
@@ -693,7 +693,7 @@ async def extract_memories(req: ExtractionRequest):
             })
         except Exception as e:
             errors.append(f"Upsert failed for '{cand.text}': {e!r}")
-    
+
     return ExtractionResponse(
         status="ok",
         person_id=person_id,

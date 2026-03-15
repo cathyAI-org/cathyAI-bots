@@ -5,12 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
-from mautrix.types import EventType, RoomID, EventID, MessageEvent, PaginationDirection
+from mautrix.types import RoomID, EventID, MessageEvent, PaginationDirection
 from catcord_bots.matrix import MatrixSession, send_text
-from catcord_bots.invites import join_all_invites
-from catcord_bots.personality import PersonalityRenderer
 from catcord_bots.state import payload_fingerprint, should_send
-from catcord_bots.formatting import format_retention_stats, format_pressure_stats
+from catcord_bots.formatting import format_retention_stats
+from cleaner.messages import build_status_message, derive_status_label
 
 
 def get_disk_usage_ratio(path: str) -> float:
@@ -134,24 +133,6 @@ class Policy:
     emergency: float = 0.92
 
 
-@dataclass
-class PersonalityConfig:
-    enabled: bool = False
-    prompt_composer_url: str = "http://192.168.1.59:8110"
-    character_id: str = "irina"
-    cathy_api_url: str = "http://192.168.1.59:8100"
-    cathy_api_key: Optional[str] = None
-    timeout_seconds: float = 60
-    connect_timeout_seconds: float = 3
-    max_tokens: int = 180
-    temperature: float = 0.0
-    top_p: float = 0.9
-    min_seconds_between_calls: int = 0
-    fallback_system_prompt: str = "You are a maintenance bot. Write short, calm, factual ops updates."
-    cathy_api_mode: str = "ollama"
-    cathy_api_model: str = "gemma2:2b"
-
-
 async def run_retention(
     session: MatrixSession,
     conn: sqlite3.Connection,
@@ -160,13 +141,12 @@ async def run_retention(
     notifications_room: Optional[str],
     send_zero: bool,
     dry_run: bool,
-    ai_cfg: Optional[PersonalityConfig] = None,
     print_effective_config: bool = False,
 ) -> None:
     start_time = datetime.now()
     cutoff_img = int((datetime.now() - timedelta(days=policy.image_days)).timestamp() * 1000)
     cutoff_non = int((datetime.now() - timedelta(days=policy.non_image_days)).timestamp() * 1000)
-    
+
     cur = conn.execute("""
         SELECT event_id, room_id, mxc_uri, mimetype, size, timestamp
         FROM uploads
@@ -176,10 +156,10 @@ async def run_retention(
     """, (cutoff_img, cutoff_non))
     candidates = cur.fetchall()
     candidates_count = len(candidates)
-    
+
     used = get_disk_usage_ratio(media_root)
     total_files = count_media_files(media_root)
-    
+
     deleted = 0
     freed = 0
     deleted_images = 0
@@ -209,23 +189,23 @@ async def run_retention(
                 deleted_non_images += 1
         except Exception as e:
             print(f"retention failed {event_id}: {e}")
-    
+
     if not notifications_room:
         return
-    
+
     action_happened = deleted > 0
     force_notify = print_effective_config
-    
-    # Gate notification BEFORE building payload or calling AI
+
+    # Gate notification BEFORE building payload
     if not force_notify and not action_happened and not send_zero:
         print(f"Not sending: send_zero disabled and no action (deleted={deleted})")
         return
-    
+
     # Build payload for fingerprinting
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     disk_percent = used * 100
-    
+
     summary_payload = {
         "run_id": f"{start_time.isoformat()}Z-retention",
         "mode": "retention",
@@ -258,7 +238,7 @@ async def run_retention(
             "duration_seconds": int(duration),
         },
     }
-    
+
     # Check dedupe (only if send_zero enabled or action happened)
     if send_zero or action_happened:
         state_path = "/state/retention_last.fp"
@@ -266,42 +246,26 @@ async def run_retention(
         if not should_send(state_path, fp, force_notify):
             print(f"Not sending: deduped (unchanged)")
             return
-    
+
+    disk_pct_after = summary_payload["disk"]["percent_after"]
+    status_label = derive_status_label(
+        mode="retention",
+        deleted_count=deleted,
+        used_pct=disk_pct_after,
+        pressure_pct=policy.pressure * 100,
+        emergency_pct=policy.emergency * 100,
+    )
+    status_msg = build_status_message(
+        status_label,
+        used_pct=disk_pct_after,
+        pressure_pct=policy.pressure * 100,
+        deleted_count=deleted,
+    )
+
     prefix = "[DRY-RUN] " if dry_run else ""
     stats = format_retention_stats(summary_payload)
-    
-    ai_prefix = None
-    if ai_cfg and ai_cfg.enabled:
-        try:
-            renderer = PersonalityRenderer(
-                prompt_composer_url=ai_cfg.prompt_composer_url,
-                character_id=ai_cfg.character_id,
-                cathy_api_url=ai_cfg.cathy_api_url,
-                fallback_system_prompt=ai_cfg.fallback_system_prompt,
-                cathy_api_key=ai_cfg.cathy_api_key,
-                timeout_seconds=ai_cfg.timeout_seconds,
-                connect_timeout_seconds=ai_cfg.connect_timeout_seconds,
-                max_tokens=ai_cfg.max_tokens,
-                temperature=ai_cfg.temperature,
-                top_p=ai_cfg.top_p,
-                min_seconds_between_calls=ai_cfg.min_seconds_between_calls,
-                cathy_api_mode=ai_cfg.cathy_api_mode,
-                cathy_api_model=ai_cfg.cathy_api_model,
-            )
-            ai_prefix = await renderer.render(summary_payload)
-            if ai_prefix:
-                ai_prefix = ai_prefix.strip().strip('"').strip("'").strip()
-                print("AI render: used")
-            else:
-                print("AI render: empty -> stats only")
-        except Exception as e:
-            print(f"AI render failed -> stats only: {e}")
-    
-    if ai_prefix:
-        message = f"{prefix}{ai_prefix}\n\n{stats}"
-    else:
-        message = f"{prefix}{stats}"
-    
+    message = f"{prefix}{status_msg}\n\n{stats}"
+
     try:
         await send_text(session, notifications_room, message)
         print(f"Sent message to {notifications_room}")
@@ -317,27 +281,26 @@ async def run_pressure(
     notifications_room: Optional[str],
     send_zero: bool,
     dry_run: bool,
-    ai_cfg: Optional[PersonalityConfig] = None,
     print_effective_config: bool = False,
 ) -> None:
     start_time = datetime.now()
     used = get_disk_usage_ratio(media_root)
-    
+
     if used < policy.pressure:
         print(f"disk usage {used:.3f} < {policy.pressure:.3f}, no action")
-        
+
         if not notifications_room:
             return
-        
+
         force_notify = print_effective_config
         if not force_notify and not send_zero:
             print(f"Not sending: send_zero disabled and no action")
             return
-        
+
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         disk_before = used * 100
-        
+
         summary_payload = {
             "run_id": f"{start_time.isoformat()}Z-pressure",
             "mode": "pressure",
@@ -361,24 +324,28 @@ async def run_pressure(
                 "duration_seconds": int(duration),
             },
         }
-        
+
         state_path = "/state/pressure_last.fp"
         fp = payload_fingerprint(summary_payload)
         if not should_send(state_path, fp, force_notify):
             print(f"Not sending: deduped (unchanged)")
             return
-        
+
         prefix = "[DRY-RUN] " if dry_run else ""
-        fallback = f"Pressure cleanup: disk={disk_before:.1f}% < threshold={policy.pressure*100:.1f}%, no action"
-        message = f"{prefix}{fallback}"
-        
+        status_msg = build_status_message(
+            "pressure_no_action",
+            used_pct=disk_before,
+            pressure_pct=policy.pressure * 100,
+        )
+        message = f"{prefix}{status_msg}"
+
         try:
             await send_text(session, notifications_room, message)
             print(f"Sent message to {notifications_room}")
         except Exception as e:
             print(f"Failed to send message: {e}")
         return
-    
+
     cur = conn.execute("""
         SELECT event_id, room_id, mxc_uri, mimetype, size, timestamp
         FROM uploads
@@ -389,7 +356,7 @@ async def run_pressure(
     deleted_images = 0
     deleted_non_images = 0
     disk_before = used * 100
-    
+
     for event_id, room_id, mxc_uri, mimetype, size, ts in cur.fetchall():
         used = get_disk_usage_ratio(media_root)
         if used < policy.pressure:
@@ -419,21 +386,21 @@ async def run_pressure(
                 deleted_non_images += 1
         except Exception as e:
             print(f"pressure failed {event_id}: {e}")
-    
+
     if not notifications_room:
         return
-    
+
     action_happened = deleted > 0
     force_notify = print_effective_config
-    
+
     if not force_notify and not action_happened and not send_zero:
         print(f"Not sending: send_zero disabled and no action (deleted={deleted})")
         return
-    
+
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     disk_after = get_disk_usage_ratio(media_root) * 100
-    
+
     summary_payload = {
         "run_id": f"{start_time.isoformat()}Z-pressure",
         "mode": "pressure",
@@ -460,20 +427,32 @@ async def run_pressure(
             "duration_seconds": int(duration),
         },
     }
-    
+
     state_path = "/state/pressure_last.fp"
     fp = payload_fingerprint(summary_payload)
     if not should_send(state_path, fp, force_notify):
         print(f"Not sending: deduped (unchanged)")
         return
-    
-    prefix = "[DRY-RUN] " if dry_run else ""
-    fallback = (
-        f"Pressure cleanup: disk={disk_before:.1f}%→{disk_after:.1f}% "
-        f"(threshold={policy.pressure*100:.1f}%), deleted={deleted}, freed_gb={freed / 1024 / 1024 / 1024:.2f}"
+
+    disk_before_pct = summary_payload["disk"]["percent_before"]
+    disk_after = summary_payload["disk"]["percent_after"]
+    status_label = derive_status_label(
+        mode="pressure",
+        deleted_count=deleted,
+        used_pct=disk_before_pct,
+        pressure_pct=policy.pressure * 100,
+        emergency_pct=policy.emergency * 100,
     )
-    message = f"{prefix}{fallback}"
-    
+    status_msg = build_status_message(
+        status_label,
+        used_pct=disk_after,
+        pressure_pct=policy.pressure * 100,
+        deleted_count=deleted,
+    )
+
+    prefix = "[DRY-RUN] " if dry_run else ""
+    message = f"{prefix}{status_msg}"
+
     try:
         await send_text(session, notifications_room, message)
         print(f"Sent message to {notifications_room}")

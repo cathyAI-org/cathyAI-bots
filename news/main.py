@@ -10,7 +10,7 @@ from news import run_digest, PersonalityConfig, FetchConfig, ServicesConfig
 
 async def main_async(args):
     """Main async entry point.
-    
+
     :param args: Command line arguments
     :type args: argparse.Namespace
     :return: None
@@ -19,18 +19,18 @@ async def main_async(args):
     raw = load_yaml(args.config)
     cfg = FrameworkConfig.from_dict(raw)
     session = create_client(cfg.bot.mxid, cfg.homeserver.url, cfg.bot.access_token)
-    
+
     try:
         me = await whoami(session)
         print("Authenticated as:", me)
-        
+
         allow = cfg.rooms_allowlist[:] if cfg.rooms_allowlist else (
             [cfg.notifications.log_room_id] if cfg.notifications.log_room_id else []
         )
         joined = await join_all_invites(session, allowlist=[r for r in allow if r])
         if joined:
             print("Auto-joined invites:", joined)
-        
+
         fetch_raw = raw.get("fetch") or {}
         fetch_cfg = FetchConfig(
             lookback_hours=int(fetch_raw.get("lookback_hours", 24)),
@@ -39,13 +39,13 @@ async def main_async(args):
             user_agent=str(fetch_raw.get("user_agent", "catcord-newsbot/1.0")),
             feeds=fetch_raw.get("feeds", {}),
         )
-        
+
         services_raw = raw.get("services") or {}
         services_cfg = ServicesConfig(
             online_url=services_raw.get("online", {}).get("url", "http://online:8088"),
             memory_url=services_raw.get("memory", {}).get("url", "http://memory:8090"),
         )
-        
+
         ai_raw = raw.get("add_personality") or {}
         ai_cfg = PersonalityConfig(
             enabled=bool(ai_raw.get("enabled", False)),
@@ -67,7 +67,7 @@ async def main_async(args):
             cathy_api_mode=str(ai_raw.get("cathy_api_mode", "ollama")),
             cathy_api_model=str(ai_raw.get("cathy_api_model", "gemma2:2b")),
         )
-        
+
         if args.mode == "digest":
             await run_digest(
                 session=session,
@@ -84,7 +84,7 @@ async def main_async(args):
 
 def main():
     """Main entry point.
-    
+
     :return: None
     :rtype: None
     """
@@ -94,7 +94,7 @@ def main():
     p.add_argument("--force-notify", action="store_true", help="Force send even if deduplicated")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
-    
+
     os.makedirs("/state", exist_ok=True)
     asyncio.run(main_async(args))
 

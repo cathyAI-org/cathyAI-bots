@@ -18,9 +18,9 @@ Example docstring format:
 ```python
 def example_function(param1: str, param2: int) -> bool:
     """Brief description of the function.
-    
+
     Longer description if needed.
-    
+
     :param param1: Description of param1
     :type param1: str
     :param param2: Description of param2
@@ -40,13 +40,13 @@ All commits must follow this exact format:
 
 Description:
 
-list of changes, one short line per change. each entry on the list should be 
+list of changes, one short line per change. each entry on the list should be
 
   - [entry]
 
 Additional info:
 
-additional info about the changes that might be good to know. 
+additional info about the changes that might be good to know.
 
   - [info]
 ```

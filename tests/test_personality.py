@@ -25,6 +25,16 @@ class TestPersonalityRenderer:
         defaults.update(kwargs)
         return PersonalityRenderer(**defaults)
 
+    # -- constructor defaults ----------------------------------------
+
+    def test_constructor_defaults(self) -> None:
+        """Test default values for optional constructor params."""
+        renderer = self._make_renderer()
+        assert renderer.timeout_seconds == 60
+        assert renderer.min_seconds_between_calls == 0
+        assert renderer.cathy_api_mode == "ollama"
+        assert renderer.cathy_api_model == "gemma2:2b"
+
     # -- normalisation -----------------------------------------------
 
     def test_normalize_prefix_removes_quotes(self) -> None:
@@ -37,59 +47,44 @@ class TestPersonalityRenderer:
 
     # -- status label derivation ------------------------------------
 
-    def test_derive_cleanup_done(self) -> None:
-        """Test deleted_count > 0 yields cleanup_done."""
-        assert PersonalityRenderer._derive_status_label(
-            {"actions": {"deleted_count": 3}, "storage_status": "healthy"}
-        ) == "cleanup_done"
-
-    def test_derive_tight_no_action(self) -> None:
-        """Test tight storage with no deletions yields tight_no_action."""
-        for status in ("tight", "warning", "pressure", "critical"):
+    def test_derive_status_labels(self) -> None:
+        cases = [
+            ({"actions": {"deleted_count": 3},
+              "storage_status": "healthy"}, "cleanup_done"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "tight"}, "tight_no_action"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "warning"}, "tight_no_action"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "pressure"}, "tight_no_action"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "critical"}, "tight_no_action"),
+            ({"mode": "retention", "candidates_count": 0,
+              "actions": {"deleted_count": 0},
+              "storage_status": "healthy"}, "retention_nothing_to_do"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "healthy"}, "healthy_no_action"),
+        ]
+        for payload, expected in cases:
             assert PersonalityRenderer._derive_status_label(
-                {"actions": {"deleted_count": 0}, "storage_status": status}
-            ) == "tight_no_action"
-
-    def test_derive_retention_nothing_to_do(self) -> None:
-        """Test retention mode with zero candidates yields
-        retention_nothing_to_do."""
-        assert PersonalityRenderer._derive_status_label(
-            {
-                "mode": "retention",
-                "candidates_count": 0,
-                "actions": {"deleted_count": 0},
-                "storage_status": "healthy",
-            }
-        ) == "retention_nothing_to_do"
-
-    def test_derive_healthy_no_action(self) -> None:
-        """Test default healthy path."""
-        assert PersonalityRenderer._derive_status_label(
-            {"actions": {"deleted_count": 0}, "storage_status": "healthy"}
-        ) == "healthy_no_action"
+                payload
+            ) == expected, f"{payload} -> {expected}"
 
     # -- validation --------------------------------------------------
 
-    def test_validate_prefix_rejects_invalid(self) -> None:
-        """Test that validation rejects invalid prefixes."""
+    def test_validate_prefix(self) -> None:
         renderer = self._make_renderer()
-
-        assert not renderer._validate_prefix("")[0]
-        assert not renderer._validate_prefix("Contains 123")[0]
-        assert not renderer._validate_prefix("I am a bot")[0]
-        assert not renderer._validate_prefix("Matrix room")[0]
-
-    def test_validate_prefix_accepts_valid(self) -> None:
-        """Test that validation accepts valid prefixes."""
-        renderer = self._make_renderer()
-
-        assert renderer._validate_prefix("Logs clear, Master.")[0]
-        assert renderer._validate_prefix(
-            "Storage getting tight, Master."
-        )[0]
-        assert renderer._validate_prefix(
-            "Cleanup executed, Master."
-        )[0]
+        cases = [
+            ("", False), ("Contains 123", False),
+            ("I am a bot", False), ("Matrix room", False),
+            ("Logs clear, Master.", True),
+            ("Storage getting tight, Master.", True),
+            ("Cleanup executed, Master.", True),
+        ]
+        for text, valid in cases:
+            assert renderer._validate_prefix(text)[0] is valid, (
+                f"{text!r} expected {valid}"
+            )
 
     def test_validate_prefix_blocks_action_words_when_no_deletions(
         self,
@@ -116,47 +111,25 @@ class TestPersonalityRenderer:
 
     # -- fallback bank -----------------------------------------------
 
-    def test_fallback_prefix_healthy_no_action(self) -> None:
-        """Test fallback selects from healthy_no_action bucket."""
+    def test_fallback_prefix_buckets(self) -> None:
+        """Test fallback selects from the correct bucket."""
         renderer = self._make_renderer()
-        payload = {
-            "actions": {"deleted_count": 0},
-            "storage_status": "healthy",
-        }
-        result = renderer._get_fallback_prefix(payload)
-        assert result in _FALLBACK_BANK["healthy_no_action"]
-
-    def test_fallback_prefix_tight_no_action(self) -> None:
-        """Test fallback selects from tight_no_action bucket."""
-        renderer = self._make_renderer()
-        payload = {
-            "actions": {"deleted_count": 0},
-            "storage_status": "tight",
-        }
-        result = renderer._get_fallback_prefix(payload)
-        assert result in _FALLBACK_BANK["tight_no_action"]
-
-    def test_fallback_prefix_cleanup_done(self) -> None:
-        """Test fallback selects from cleanup_done bucket."""
-        renderer = self._make_renderer()
-        payload = {
-            "actions": {"deleted_count": 5},
-            "storage_status": "healthy",
-        }
-        result = renderer._get_fallback_prefix(payload)
-        assert result in _FALLBACK_BANK["cleanup_done"]
-
-    def test_fallback_prefix_retention_nothing_to_do(self) -> None:
-        """Test fallback selects from retention_nothing_to_do bucket."""
-        renderer = self._make_renderer()
-        payload = {
-            "mode": "retention",
-            "candidates_count": 0,
-            "actions": {"deleted_count": 0},
-            "storage_status": "healthy",
-        }
-        result = renderer._get_fallback_prefix(payload)
-        assert result in _FALLBACK_BANK["retention_nothing_to_do"]
+        cases = [
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "healthy"}, "healthy_no_action"),
+            ({"actions": {"deleted_count": 0},
+              "storage_status": "tight"}, "tight_no_action"),
+            ({"actions": {"deleted_count": 5},
+              "storage_status": "healthy"}, "cleanup_done"),
+            ({"mode": "retention", "candidates_count": 0,
+              "actions": {"deleted_count": 0},
+              "storage_status": "healthy"}, "retention_nothing_to_do"),
+        ]
+        for payload, bucket in cases:
+            result = renderer._get_fallback_prefix(payload)
+            assert result in _FALLBACK_BANK[bucket], (
+                f"{bucket}: {result!r} not in bank"
+            )
 
     def test_fallback_prefix_deterministic_for_same_payload(
         self,

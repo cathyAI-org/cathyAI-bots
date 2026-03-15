@@ -1,0 +1,175 @@
+{
+  "retention_nothing_to_do": {
+    "opening": [
+      "Nothing expired, Master.",
+      "No stale media, Master.",
+      "All clear, Master.",
+      "No old media, Master.",
+      "No expired items, Master.",
+      "Nothing needed removal, Master.",
+      "No retention work needed, Master.",
+      "Storage looks orderly, Master.",
+      "No stale files found, Master.",
+      "No cleanup needed, Master."
+    ],
+    "truth": [
+      "Retention found nothing to remove.",
+      "No files were old enough to delete.",
+      "Nothing met the retention threshold.",
+      "No media qualified for deletion.",
+      "No stored items had expired.",
+      "Everything remains within policy.",
+      "Retention rules found no matches.",
+      "No aged media required action.",
+      "Nothing was eligible for removal.",
+      "No stale uploads were identified."
+    ],
+    "stats": [
+      "Disk usage is {used_pct:.1f}%.",
+      "Current usage remains {used_pct:.1f}%.",
+      "Storage currently sits at {used_pct:.1f}%.",
+      "Used capacity is {used_pct:.1f}%.",
+      "Storage remains at {used_pct:.1f}% usage."
+    ],
+    "closer": [
+      "",
+      "No action was needed.",
+      "Everything remains tidy.",
+      "Storage is stable.",
+      "Policy is satisfied."
+    ]
+  },
+
+  "retention_cleanup_done": {
+    "opening": [
+      "Expired media removed, Master.",
+      "Retention cleanup complete, Master.",
+      "Old media cleared, Master.",
+      "Stale files removed, Master.",
+      "Retention work finished, Master.",
+      "Cleanup completed, Master.",
+      "Aged media was cleared, Master.",
+      "Old uploads were removed, Master."
+    ],
+    "truth": [
+      "Retention deleted files beyond policy age.",
+      "Expired items were removed successfully.",
+      "Old media was purged by policy.",
+      "Stale uploads were cleared.",
+      "Retention removed aged content.",
+      "Files past their limit were deleted.",
+      "Policy cleanup reclaimed space.",
+      "Aged media was pruned."
+    ],
+    "stats": [
+      "Removed {deleted_count} {file_word}; usage is now {used_pct:.1f}%.",
+      "Deleted {deleted_count} {file_word}; storage is now {used_pct:.1f}%.",
+      "{deleted_count} {file_word} were removed; disk usage fell to {used_pct:.1f}%.",
+      "Usage is now {used_pct:.1f}% after removing {deleted_count} {file_word}.",
+      "Reclaimed space by deleting {deleted_count} {file_word}; usage is {used_pct:.1f}%."
+    ],
+    "closer": [
+      "",
+      "Space has been reclaimed.",
+      "Policy is back in balance.",
+      "Storage has been trimmed.",
+      "The backlog is lighter now."
+    ]
+  },
+
+  "pressure_no_action": {
+    "opening": [
+      "Storage is healthy, Master.",
+      "All clear, Master.",
+      "No pressure action needed, Master.",
+      "Pressure remains low, Master.",
+      "No cleanup required, Master.",
+      "System remains comfortable, Master.",
+      "Disk pressure is normal, Master."
+    ],
+    "truth": [
+      "Usage remains below the pressure threshold.",
+      "Pressure cleanup was not needed.",
+      "No pressure trigger was reached.",
+      "Storage stayed below the action limit.",
+      "Usage is comfortably under threshold.",
+      "No pressure-based cleanup was required.",
+      "The pressure threshold was not crossed."
+    ],
+    "stats": [
+      "Current usage is {used_pct:.1f}%.",
+      "Disk usage remains {used_pct:.1f}%.",
+      "Storage currently sits at {used_pct:.1f}%.",
+      "Used capacity is {used_pct:.1f}%, below the {pressure_pct:.1f}% threshold.",
+      "Usage is {used_pct:.1f}%, still under the {pressure_pct:.1f}% trigger."
+    ],
+    "closer": [
+      "",
+      "Everything remains stable.",
+      "No intervention was needed.",
+      "Storage is behaving normally."
+    ]
+  },
+
+  "pressure_cleanup_done": {
+    "opening": [
+      "Pressure relieved, Master.",
+      "Pressure cleanup complete, Master.",
+      "Storage pressure reduced, Master.",
+      "Cleanup completed, Master.",
+      "Pressure-triggered cleanup finished, Master.",
+      "Space was reclaimed, Master.",
+      "Pressure response complete, Master."
+    ],
+    "truth": [
+      "Usage crossed the pressure threshold and cleanup ran.",
+      "Pressure cleanup removed stored media.",
+      "Storage pressure triggered file removal.",
+      "Cleanup ran to reduce disk pressure.",
+      "Pressure handling completed successfully.",
+      "The threshold was crossed and cleanup executed."
+    ],
+    "stats": [
+      "Removed {deleted_count} {file_word}; usage is now {used_pct:.1f}%.",
+      "Deleted {deleted_count} {file_word}; disk usage fell to {used_pct:.1f}%.",
+      "Usage dropped to {used_pct:.1f}% after removing {deleted_count} {file_word}.",
+      "Storage is now {used_pct:.1f}% after deleting {deleted_count} {file_word}.",
+      "{deleted_count} {file_word} were removed; current usage is {used_pct:.1f}%."
+    ],
+    "closer": [
+      "",
+      "Pressure has eased.",
+      "Storage has more room again.",
+      "The system is back under control."
+    ]
+  },
+
+  "emergency_cleanup_done": {
+    "opening": [
+      "Emergency cleanup complete, Master.",
+      "Critical pressure relieved, Master.",
+      "Emergency action finished, Master.",
+      "Storage emergency handled, Master.",
+      "Critical cleanup completed, Master."
+    ],
+    "truth": [
+      "Usage crossed the emergency threshold and cleanup ran.",
+      "Emergency pressure required immediate cleanup.",
+      "Critical storage pressure triggered removal.",
+      "Emergency cleanup reclaimed space.",
+      "The emergency threshold was breached and handled."
+    ],
+    "stats": [
+      "Removed {deleted_count} {file_word}; usage is now {used_pct:.1f}%.",
+      "Deleted {deleted_count} {file_word}; storage fell to {used_pct:.1f}%.",
+      "Usage dropped to {used_pct:.1f}% after emergency cleanup.",
+      "{deleted_count} {file_word} were removed; current usage is {used_pct:.1f}%."
+    ],
+    "closer": [
+      "",
+      "The immediate risk has passed.",
+      "Storage is no longer in the danger zone.",
+      "Emergency pressure has eased."
+    ]
+  }
+}

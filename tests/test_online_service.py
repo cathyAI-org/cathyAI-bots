@@ -8,12 +8,12 @@ def test_health():
     """Test health endpoint."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "online"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             response = client.get("/health")
@@ -24,18 +24,18 @@ def test_health():
 def test_fetch_rss_empty_feeds():
     """Test RSS fetch with empty feeds list."""
     import sys
-    
+
     # Clear any cached main module
     if 'main' in sys.modules:
         del sys.modules['main']
-    
+
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "online"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             response = client.post(

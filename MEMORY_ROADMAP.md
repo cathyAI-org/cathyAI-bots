@@ -237,11 +237,11 @@ Response: `{"status": "forgotten", "fingerprint": "..."}`
 ```python
 results = {
     "curated": [
-        {"id": 12, "type": "preference", "text": "Call me Sam.", 
+        {"id": 12, "type": "preference", "text": "Call me Sam.",
          "importance": 0.8, "sources": [101, 103]}
     ],
     "semantic": [
-        {"chunk_id": "...", "text": "...", "score": 0.72, 
+        {"chunk_id": "...", "text": "...", "score": 0.72,
          "source_event_id": 98}
     ],
     "recent": [...],

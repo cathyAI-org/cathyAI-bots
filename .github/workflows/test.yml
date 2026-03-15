@@ -35,8 +35,8 @@ jobs:
           git checkout main
           git pull origin main
           git merge dmz --no-edit || (
-            git checkout --theirs .env.template && 
-            git add .env.template && 
+            git checkout --theirs .env.template &&
+            git add .env.template &&
             git commit -m "Merge dmz: resolve .env.template conflict"
           )
           git push origin main

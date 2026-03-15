@@ -14,6 +14,8 @@ bots/
 ├── cleaner/           # Media cleanup bot
 │   ├── main.py        # Entry point
 │   ├── cleaner.py     # Cleanup logic
+│   ├── messages.py    # Deterministic message composition
+│   ├── message_parts.json  # Status-based sentence fragments
 │   └── config.yaml    # Configuration
 ├── news/              # News digest bot
 │   ├── main.py        # Entry point
@@ -33,7 +35,7 @@ bots/
 - **AI Personality**: Optional AI-generated status prefixes via prompt-composer
 - **Deduplication**: Prevents duplicate notifications using payload fingerprints
 - **State Management**: Tracks last notification to avoid spam
-- **Deterministic Facts**: LLM only generates intros, never invents news items
+- **Deterministic Messages**: Status-based message composition from JSON sentence parts
 
 ## Setup
 
@@ -74,14 +76,6 @@ cleaner:
     non_image_days: 30
     pressure: 0.85
     emergency: 0.92
-
-add_personality:
-  enabled: true
-  prompt_composer_url: "http://localhost:8110"
-  character_id: "irina"
-  cathy_api_url: "http://localhost:8100"
-  cathy_api_mode: "ollama"
-  cathy_api_model: "gemma2:2b"
 ```
 
 ## Usage
@@ -181,6 +175,24 @@ If AI fails or is disabled, a status-based phrase bank provides variety while re
 - **Retention check, nothing expired**: "Nothing expired, Master.", "No stale media found, Master.", etc.
 - **No deletions + tight storage**: "Storage getting tight, Master.", "Usage is climbing, Master.", etc.
 - **Deletions occurred**: "Cleanup completed, Master.", "Maintenance complete, Master.", etc.
+
+## Cleaner Message Composition
+
+The cleaner bot composes notification messages deterministically from `cleaner/message_parts.json`. Each status label has four fragment categories:
+
+- **opening**: Short greeting/status line (e.g. "Nothing expired, Master.")
+- **truth**: Factual description of what happened
+- **stats**: Formatted stats with placeholders (`{used_pct}`, `{deleted_count}`, `{file_word}`)
+- **closer**: Optional sign-off (empty string = omitted)
+
+Status labels:
+- `retention_nothing_to_do` — retention ran, nothing expired
+- `retention_cleanup_done` — retention deleted files
+- `pressure_no_action` — below pressure threshold
+- `pressure_cleanup_done` — pressure cleanup ran
+- `emergency_cleanup_done` — emergency threshold breached
+
+To tune wording, edit `message_parts.json` — no Python changes needed.
 
 ## Deduplication
 

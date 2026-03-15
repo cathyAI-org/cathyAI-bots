@@ -8,7 +8,7 @@ from mautrix.types import RoomID
 @dataclass
 class MatrixSession:
     """Matrix session container.
-    
+
     :param api: Matrix HTTP API instance
     :type api: HTTPAPI
     :param client: Matrix client instance
@@ -19,7 +19,7 @@ class MatrixSession:
 
     async def close(self) -> None:
         """Close the Matrix API session.
-        
+
         :return: None
         :rtype: None
         """
@@ -31,7 +31,7 @@ class MatrixSession:
 
 def create_client(mxid: str, base_url: str, token: str) -> MatrixSession:
     """Create a Matrix client session.
-    
+
     :param mxid: Matrix user ID
     :type mxid: str
     :param base_url: Homeserver base URL
@@ -48,7 +48,7 @@ def create_client(mxid: str, base_url: str, token: str) -> MatrixSession:
 
 async def whoami(session: MatrixSession) -> str:
     """Get the current user ID.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :return: User ID
@@ -60,7 +60,7 @@ async def whoami(session: MatrixSession) -> str:
 
 async def send_text(session: MatrixSession, room_id: str, body: str) -> None:
     """Send a text message to a room.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :param room_id: Room ID

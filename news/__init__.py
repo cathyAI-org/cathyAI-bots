@@ -13,7 +13,7 @@ from news.format import format_digest
 @dataclass
 class FetchConfig:
     """Feed fetch configuration.
-    
+
     :param lookback_hours: Hours to look back for items
     :type lookback_hours: int
     :param max_items: Maximum items to fetch
@@ -30,7 +30,7 @@ class FetchConfig:
     timeout_s: float = 10.0
     user_agent: str = "catcord-newsbot/1.0"
     feeds: Dict[str, list] = None
-    
+
     def __post_init__(self):
         if self.feeds is None:
             self.feeds = {}
@@ -39,7 +39,7 @@ class FetchConfig:
 @dataclass
 class ServicesConfig:
     """Services configuration.
-    
+
     :param online_url: Online service URL
     :type online_url: str
     :param memory_url: Memory service URL
@@ -52,7 +52,7 @@ class ServicesConfig:
 @dataclass
 class PersonalityConfig:
     """AI personality configuration.
-    
+
     :param enabled: Enable AI personality
     :type enabled: bool
     :param prompt_composer_url: Prompt composer URL
@@ -108,7 +108,7 @@ async def run_digest(
     dry_run: bool = False,
 ) -> None:
     """Run daily news digest.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :param fetch_cfg: Fetch configuration
@@ -127,7 +127,7 @@ async def run_digest(
     :rtype: None
     """
     start_time = datetime.now(timezone.utc)
-    
+
     all_items = []
     async with httpx.AsyncClient(timeout=30.0) as client:
         for section_name, feed_urls in fetch_cfg.feeds.items():
@@ -142,7 +142,7 @@ async def run_digest(
                     "room_id": notifications_room,
                 },
             }
-            
+
             try:
                 resp = await client.post(
                     f"{services_cfg.online_url}/v1/rss/fetch",
@@ -151,31 +151,31 @@ async def run_digest(
                 resp.raise_for_status()
                 data = resp.json()
                 items = data.get("items", [])
-                
+
                 if items:
                     all_items.append({"name": section_name, "items": items})
             except Exception as e:
                 print(f"Error fetching {section_name}: {e!r}")
                 continue
-    
+
     payload = {
         "mode": "daily_digest",
         "ts": start_time.isoformat(),
         "lookback_hours": fetch_cfg.lookback_hours,
         "sections": all_items,
     }
-    
+
     if not notifications_room:
         print("No notifications_room configured")
         return
-    
+
     state_path = "/state/digest_last.fp"
     fp = payload_fingerprint(payload)
-    
+
     if not should_send(state_path, fp, force_notify):
         print("Digest unchanged, skipping send (use --force-notify to override)")
         return
-    
+
     ai_prefix = None
     if ai_cfg and ai_cfg.enabled:
         try:
@@ -194,7 +194,7 @@ async def run_digest(
                 cathy_api_mode=ai_cfg.cathy_api_mode,
                 cathy_api_model=ai_cfg.cathy_api_model,
             )
-            
+
             ai_prefix = await renderer.render(payload, task_id="news_digest_prefix")
             if ai_prefix:
                 ai_prefix = ai_prefix.strip().strip('"').strip("'").strip()
@@ -203,10 +203,10 @@ async def run_digest(
                 print("AI render: empty -> deterministic only")
         except Exception as e:
             print(f"AI render failed -> deterministic only: {e}")
-    
+
     message = format_digest(payload, ai_prefix)
     prefix = "[DRY-RUN] " if dry_run else ""
-    
+
     if dry_run:
         print(f"{prefix}Would send:")
         print(message)

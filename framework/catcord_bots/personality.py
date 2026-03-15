@@ -65,7 +65,7 @@ _STATUS_PROMPT_HINTS: Dict[str, str] = {
 
 class PersonalityRenderer:
     """Renders AI-generated status prefixes using prompt-composer and LLM.
-    
+
     :param prompt_composer_url: URL of prompt-composer service
     :type prompt_composer_url: str
     :param character_id: Character ID for personality
@@ -93,7 +93,7 @@ class PersonalityRenderer:
     :param cathy_api_model: Model name
     :type cathy_api_model: str
     """
-    
+
     def __init__(
         self,
         prompt_composer_url: str,
@@ -128,7 +128,7 @@ class PersonalityRenderer:
 
     def _rate_limited(self) -> bool:
         """Check if rate limit prevents API call.
-        
+
         :return: True if rate limited
         :rtype: bool
         """
@@ -188,7 +188,7 @@ class PersonalityRenderer:
         self, client: httpx.AsyncClient, summary_payload: Dict[str, Any], task: str
     ) -> Optional[Dict[str, Any]]:
         """Call prompt-composer to build system prompt and messages.
-        
+
         :param client: HTTP client
         :type client: httpx.AsyncClient
         :param summary_payload: Summary data for prompt composition
@@ -204,7 +204,7 @@ class PersonalityRenderer:
             "character_id": self.character_id,
             "task_inputs": summary_payload,
         }
-        
+
         url = f"{self.prompt_composer_url.rstrip('/')}/v1/prompt/compose"
         try:
             print(f"PersonalityRenderer: calling prompt-composer task={task}", flush=True)
@@ -225,7 +225,7 @@ class PersonalityRenderer:
 
     def _normalize_prefix(self, raw: str) -> str:
         """Normalize raw prefix by removing wrapping quotes.
-        
+
         :param raw: Raw prefix text
         :type raw: str
         :return: Normalized prefix
@@ -242,7 +242,7 @@ class PersonalityRenderer:
         self, client: httpx.AsyncClient, messages: List[Dict[str, str]]
     ) -> Optional[str]:
         """Call LLM with messages and return prefix text.
-        
+
         :param client: HTTP client
         :type client: httpx.AsyncClient
         :param messages: Chat messages
@@ -253,7 +253,7 @@ class PersonalityRenderer:
         headers = {"Content-Type": "application/json"}
         if self.cathy_api_key:
             headers["Authorization"] = f"Bearer {self.cathy_api_key}"
-        
+
         try:
             if self.cathy_api_mode.lower() == "ollama":
                 body = {
@@ -298,9 +298,9 @@ class PersonalityRenderer:
                     .get("content", "")
                     .strip()
                 )
-            
+
             return prefix if prefix else None
-            
+
         except httpx.TimeoutException as e:
             print(f"PersonalityRenderer: LLM timeout: {e!r}", flush=True)
             return None
@@ -322,10 +322,6 @@ class PersonalityRenderer:
         :return: Fallback prefix
         :rtype: str
         """
-        actions = summary_payload.get("actions", {})
-        deleted_count = actions.get("deleted_count", 0)
-        storage_status = summary_payload.get("storage_status", "unknown")
-
         bucket = self._derive_status_label(summary_payload)
 
         phrases = _FALLBACK_BANK[bucket]
@@ -401,7 +397,7 @@ class PersonalityRenderer:
         self, summary_payload: Dict[str, Any], task_id: Optional[str] = None
     ) -> Optional[str]:
         """Render AI prefix using prompt-composer and LLM.
-        
+
         :param summary_payload: Summary data for rendering
         :type summary_payload: Dict[str, Any]
         :param task_id: Explicit task identifier (overrides mode inference)
@@ -426,7 +422,7 @@ class PersonalityRenderer:
                 if not prompt_bundle:
                     print("PersonalityRenderer: no prompt bundle, skipping AI", flush=True)
                     return None
-                
+
                 messages = prompt_bundle.get("messages")
                 if not messages:
                     system_text = prompt_bundle.get("system_text", "")
@@ -452,7 +448,7 @@ class PersonalityRenderer:
                             "no questions."
                         )},
                     ]
-                
+
                 for attempt in range(2):
                     print(f"PersonalityRenderer: input_messages={json.dumps(messages, indent=2)}", flush=True)
                     raw_prefix = await self._call_llm(client, messages)
@@ -461,11 +457,11 @@ class PersonalityRenderer:
                         if attempt == 0:
                             continue
                         return None
-                    
+
                     print(f"PersonalityRenderer: raw_prefix={raw_prefix!r}", flush=True)
                     normalized = self._normalize_prefix(raw_prefix)
                     print(f"PersonalityRenderer: normalized={normalized!r}", flush=True)
-                    
+
                     deleted_count = summary_payload.get(
                         "actions", {}
                     ).get("deleted_count", 0)
@@ -473,7 +469,7 @@ class PersonalityRenderer:
                         normalized, deleted_count=deleted_count
                     )
                     print(f"PersonalityRenderer: validation={ok} reason={reason!r}", flush=True)
-                    
+
                     if not ok:
                         print(f"PersonalityRenderer: rejected (attempt={attempt})", flush=True)
                         if attempt == 0:
@@ -488,10 +484,10 @@ class PersonalityRenderer:
                         fallback = self._get_fallback_prefix(summary_payload)
                         print(f"PersonalityRenderer: using fallback={fallback!r}", flush=True)
                         return fallback
-                    
+
                     print(f"PersonalityRenderer: accepted prefix={normalized!r}", flush=True)
                     return normalized
-                
+
                 fallback = self._get_fallback_prefix(summary_payload)
                 print(f"PersonalityRenderer: using fallback={fallback!r}", flush=True)
                 return fallback

@@ -7,7 +7,7 @@ import yaml
 
 def load_yaml(path: str | Path) -> Dict[str, Any]:
     """Load YAML file and return as dictionary.
-    
+
     :param path: Path to YAML file
     :type path: str | Path
     :return: Parsed YAML content
@@ -20,7 +20,7 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
 @dataclass
 class BotCreds:
     """Bot credentials.
-    
+
     :param mxid: Matrix user ID
     :type mxid: str
     :param access_token: Access token
@@ -33,7 +33,7 @@ class BotCreds:
 @dataclass
 class Homeserver:
     """Homeserver configuration.
-    
+
     :param url: Homeserver URL
     :type url: str
     :param server_name: Optional server name
@@ -46,7 +46,7 @@ class Homeserver:
 @dataclass
 class Notifications:
     """Notification configuration.
-    
+
     :param log_room_id: Optional log room ID
     :type log_room_id: Optional[str]
     :param send_deletion_summary: Whether to send deletion summaries
@@ -65,7 +65,7 @@ class Notifications:
 @dataclass
 class FrameworkConfig:
     """Framework configuration.
-    
+
     :param homeserver: Homeserver configuration
     :type homeserver: Homeserver
     :param bot: Bot credentials
@@ -83,7 +83,7 @@ class FrameworkConfig:
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "FrameworkConfig":
         """Create FrameworkConfig from dictionary.
-        
+
         :param d: Configuration dictionary
         :type d: Dict[str, Any]
         :return: Framework configuration

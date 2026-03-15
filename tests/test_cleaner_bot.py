@@ -4,8 +4,8 @@ import sqlite3
 from pathlib import Path
 import cleaner.event_main as event_main
 from cleaner.cleaner import (
-    parse_mxc, find_media_files, get_disk_usage_ratio, 
-    Policy, PersonalityConfig, init_db, extract_mxc_and_info
+    parse_mxc, find_media_files, get_disk_usage_ratio,
+    Policy, init_db, extract_mxc_and_info
 )
 
 
@@ -38,26 +38,6 @@ class TestCleanerBot:
         assert p.non_image_days == 30
         assert p.pressure == 0.85
         assert p.emergency == 0.92
-
-    def test_personality_config_defaults(self):
-        cfg = PersonalityConfig()
-        assert cfg.enabled is False
-        assert cfg.character_id == "irina"
-        assert cfg.prompt_composer_url == "http://192.168.1.59:8110"
-        assert cfg.cathy_api_key is None
-        assert cfg.timeout_seconds == 60
-        assert cfg.max_tokens == 180
-        assert cfg.temperature == 0.0
-        assert cfg.cathy_api_mode == "ollama"
-        assert cfg.cathy_api_model == "gemma2:2b"
-
-    def test_personality_config_with_auth(self):
-        cfg = PersonalityConfig(
-            enabled=True,
-            prompt_composer_url="http://test.com:8110",
-        )
-        assert cfg.enabled is True
-        assert cfg.prompt_composer_url == "http://test.com:8110"
 
     def test_init_db_creates_table(self):
         with tempfile.TemporaryDirectory() as tmpdir:

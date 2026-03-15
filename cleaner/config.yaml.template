@@ -21,24 +21,3 @@ notifications:
   send_zero_deletion_summaries: false
 
 rooms_allowlist: []
-
-add_personality:
-  enabled: true
-  prompt_composer_url: "http://192.168.1.57:8110"
-  characters_api_url: "http://192.168.1.59:8090"
-  characters_api_key: ""
-  characters_api_key_header: "X-API-Key"
-  character_id: "irina"
-  cathy_api_url: "http://192.168.1.57:8100"
-  cathy_api_key: null
-  timeout_seconds: 60
-  connect_timeout_seconds: 3
-  max_tokens: 180
-  temperature: 0.4
-  top_p: 0.9
-  min_seconds_between_calls: 0
-  cathy_api_mode: "ollama"
-  cathy_api_model: "gemma2:2b"
-  fallback_system_prompt: |
-    You are Irina, the Catcord maintenance bot.
-    Write short, calm, factual ops updates.

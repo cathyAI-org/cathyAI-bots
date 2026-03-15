@@ -50,7 +50,7 @@ class FetchResponse(BaseModel):
 
 def init_db():
     """Initialize cache database.
-    
+
     :return: None
     :rtype: None
     """
@@ -73,7 +73,7 @@ def init_db():
 @app.get("/health")
 async def health():
     """Health check endpoint.
-    
+
     :return: Health status
     :rtype: Dict[str, str]
     """
@@ -83,7 +83,7 @@ async def health():
 @app.post("/v1/rss/fetch", response_model=FetchResponse)
 async def fetch_rss(req: FetchRequest):
     """Fetch RSS/Atom feeds with caching.
-    
+
     :param req: Fetch request
     :type req: FetchRequest
     :return: Fetch response
@@ -95,19 +95,19 @@ async def fetch_rss(req: FetchRequest):
         room_id = req.caller.get("room_id")
         if room_id and room_id not in ALLOWLIST_ROOMS:
             raise HTTPException(status_code=403, detail="Room not in allowlist")
-    
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=req.lookback_hours)
     items: List[Dict[str, Any]] = []
-    
+
     user_agent = req.user_agent or "catcord-online/1.0"
     timeout_s = req.timeout_s or 10.0
-    
+
     headers = {"User-Agent": user_agent}
     timeout = httpx.Timeout(timeout_s)
-    
+
     conn = sqlite3.connect(DB_PATH)
     now = datetime.now(timezone.utc).isoformat()
-    
+
     try:
         async with httpx.AsyncClient(headers=headers, timeout=timeout) as client:
             for feed_url in req.feeds:
@@ -116,16 +116,16 @@ async def fetch_rss(req: FetchRequest):
                         "SELECT etag, last_modified, content_hash, response_data FROM cache WHERE url = ?",
                         (feed_url,)
                     ).fetchone()
-                    
+
                     req_headers = {}
                     if cached:
                         if cached[0]:
                             req_headers["If-None-Match"] = cached[0]
                         if cached[1]:
                             req_headers["If-Modified-Since"] = cached[1]
-                    
+
                     resp = await client.get(feed_url, headers=req_headers)
-                    
+
                     if resp.status_code == 304 and cached:
                         feed_data = json.loads(cached[3])
                         conn.execute(
@@ -136,22 +136,22 @@ async def fetch_rss(req: FetchRequest):
                     else:
                         resp.raise_for_status()
                         feed = feedparser.parse(resp.text)
-                        
+
                         source = feed.feed.get("title", "Unknown")
                         feed_items = []
-                        
+
                         for entry in feed.entries:
                             pub_dt = _parse_published(entry)
                             if not pub_dt or pub_dt < cutoff:
                                 continue
-                            
+
                             title = entry.get("title", "").strip()
                             link = entry.get("link", "").strip()
                             snippet = _extract_snippet(entry)
-                            
+
                             if not title or not link:
                                 continue
-                            
+
                             feed_items.append({
                                 "title": title,
                                 "source": source,
@@ -160,13 +160,13 @@ async def fetch_rss(req: FetchRequest):
                                 "snippet": snippet,
                                 "feed_url": feed_url,
                             })
-                        
+
                         feed_data = {"items": feed_items}
-                        
+
                         content_hash = hashlib.sha256(
                             json.dumps(feed_data, sort_keys=True).encode()
                         ).hexdigest()
-                        
+
                         if cached and cached[2] == content_hash:
                             conn.execute(
                                 "UPDATE cache SET fetched_at = ? WHERE url = ?",
@@ -175,7 +175,7 @@ async def fetch_rss(req: FetchRequest):
                         else:
                             etag = resp.headers.get("etag")
                             last_mod = resp.headers.get("last-modified")
-                            
+
                             conn.execute("""
                                 INSERT OR REPLACE INTO cache
                                 (url, etag, last_modified, content_hash, fetched_at, response_data)
@@ -189,18 +189,18 @@ async def fetch_rss(req: FetchRequest):
                                 json.dumps(feed_data),
                             ))
                         conn.commit()
-                    
+
                     items.extend(feed_data["items"])
-                    
+
                 except Exception as e:
                     print(f"Error fetching {feed_url}: {e!r}")
                     continue
     finally:
         conn.close()
-    
+
     items.sort(key=lambda x: x["published_at"], reverse=True)
     items = items[:req.max_items]
-    
+
     return FetchResponse(
         items=items,
         fetched_at=now,
@@ -209,7 +209,7 @@ async def fetch_rss(req: FetchRequest):
 
 def _parse_published(entry: Any) -> Optional[datetime]:
     """Parse published date from feed entry.
-    
+
     :param entry: Feed entry
     :type entry: Any
     :return: Published datetime or None
@@ -227,7 +227,7 @@ def _parse_published(entry: Any) -> Optional[datetime]:
 
 def _strip_html(text: str) -> str:
     """Strip HTML tags and collapse whitespace.
-    
+
     :param text: Text with HTML
     :type text: str
     :return: Plain text
@@ -240,7 +240,7 @@ def _strip_html(text: str) -> str:
 
 def _extract_snippet(entry: Any) -> str:
     """Extract snippet from feed entry.
-    
+
     :param entry: Feed entry
     :type entry: Any
     :return: Snippet text (max 280 chars)
@@ -251,7 +251,7 @@ def _extract_snippet(entry: Any) -> str:
         text = entry.summary
     elif hasattr(entry, "description"):
         text = entry.description
-    
+
     text = _strip_html(text)
     if len(text) > 280:
         text = text[:277] + "..."

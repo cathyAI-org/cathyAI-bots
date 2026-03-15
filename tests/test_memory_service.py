@@ -8,12 +8,12 @@ def test_health():
     """Test health endpoint."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             response = client.get("/health")
@@ -25,12 +25,12 @@ def test_ingest_event():
     """Test event ingestion."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             response = client.post(
@@ -54,12 +54,12 @@ def test_query_memory():
     """Test memory query."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # First ingest an event
@@ -74,7 +74,7 @@ def test_query_memory():
                     "ts": "2024-01-01T12:00:00+00:00",
                 },
             )
-            
+
             # Then query
             response = client.post(
                 "/v1/memory/query",
@@ -94,12 +94,12 @@ def test_memory_upsert():
     """Test memory upsert."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # First upsert
@@ -121,7 +121,7 @@ def test_memory_upsert():
             assert data["created"] is True
             fingerprint = data["fingerprint"]
             mem_id = data["id"]
-            
+
             # Second upsert with same fingerprint (idempotent)
             response2 = client.post(
                 "/v1/memories/upsert",
@@ -147,12 +147,12 @@ def test_memory_list():
     """Test memory list."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # Upsert a memory
@@ -166,7 +166,7 @@ def test_memory_list():
                     "importance": 0.8,
                 },
             )
-            
+
             # List memories
             response = client.get(
                 "/v1/memories/list",
@@ -184,12 +184,12 @@ def test_memory_forget():
     """Test memory forget (soft delete)."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # Upsert a memory
@@ -204,7 +204,7 @@ def test_memory_forget():
                 },
             )
             fingerprint = upsert_resp.json()["fingerprint"]
-            
+
             # Forget by fingerprint
             forget_resp = client.post(
                 "/v1/memories/forget",
@@ -212,14 +212,14 @@ def test_memory_forget():
             )
             assert forget_resp.status_code == 200
             assert forget_resp.json()["status"] == "forgotten"
-            
+
             # List should not include deleted
             list_resp = client.get(
                 "/v1/memories/list",
                 params={"person_id": "person_123"},
             )
             assert len(list_resp.json()["memories"]) == 0
-            
+
             # List with include_deleted should show it
             list_deleted_resp = client.get(
                 "/v1/memories/list",
@@ -233,12 +233,12 @@ def test_memory_source_merge():
     """Test source_event_ids merge on upsert."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # First upsert with sources [1, 2]
@@ -251,7 +251,7 @@ def test_memory_source_merge():
                     "source_event_ids": [1, 2],
                 },
             )
-            
+
             # Second upsert with sources [2, 3] (should merge to [1, 2, 3])
             client.post(
                 "/v1/memories/upsert",
@@ -262,7 +262,7 @@ def test_memory_source_merge():
                     "source_event_ids": [2, 3],
                 },
             )
-            
+
             # Check merged sources
             list_resp = client.get(
                 "/v1/memories/list",
@@ -277,12 +277,12 @@ def test_memory_extraction():
     """Test memory extraction from messages."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "memory"))
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import main
         main.DB_PATH = Path(tmpdir) / "test.db"
         main.init_db()
-        
+
         from fastapi.testclient import TestClient
         with TestClient(main.app) as client:
             # Extract memories from messages
@@ -305,7 +305,7 @@ def test_memory_extraction():
             assert data["status"] == "ok"
             assert len(data["candidates"]) >= 2
             assert len(data["upserted"]) >= 2
-            
+
             # Verify memories were stored
             list_resp = client.get(
                 "/v1/memories/list",

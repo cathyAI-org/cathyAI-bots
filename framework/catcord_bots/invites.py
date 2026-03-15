@@ -5,7 +5,7 @@ from .matrix import MatrixSession
 
 async def list_invites(session: MatrixSession) -> List[str]:
     """List all pending room invites.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :return: List of room IDs with pending invites
@@ -22,7 +22,7 @@ async def list_invites(session: MatrixSession) -> List[str]:
 
 async def join_room(session: MatrixSession, room_id: str) -> None:
     """Join a Matrix room.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :param room_id: Room ID to join
@@ -39,7 +39,7 @@ async def join_room(session: MatrixSession, room_id: str) -> None:
 
 async def join_all_invites(session: MatrixSession, allowlist: list[str] | None = None) -> List[str]:
     """Join all pending room invites, optionally filtered by allowlist.
-    
+
     :param session: Matrix session
     :type session: MatrixSession
     :param allowlist: Optional list of allowed room IDs
