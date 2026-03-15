@@ -4,7 +4,7 @@ import os
 from catcord_bots.config import load_yaml, FrameworkConfig
 from catcord_bots.matrix import create_client, whoami
 from catcord_bots.invites import join_all_invites
-from cleaner import init_db, sync_uploads, Policy, run_retention, run_pressure
+from .cleaner import init_db, sync_uploads, Policy, run_retention, run_pressure
 
 
 async def main_async(args):
