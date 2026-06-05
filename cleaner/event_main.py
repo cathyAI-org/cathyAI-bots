@@ -9,7 +9,7 @@ from mautrix.types import (
     RoomEventFilter,
 )
 from catcord_bots.config import load_yaml, FrameworkConfig
-from catcord_bots.matrix import create_client, whoami
+from catcord_bots.matrix import create_client, create_client_e2ee, whoami
 from catcord_bots.invites import join_all_invites
 try:
     from .cleaner import (
@@ -34,21 +34,89 @@ conn = None
 
 
 async def on_message(event: MessageEvent, session, cfg, policy):
-    """Handle media upload events."""
+    """Handle media upload, including decrypted E2EE media when possible."""
     global conn
 
-    if str(event.content.msgtype) not in ("m.image", "m.video", "m.file", "m.audio"):
+    event_type = str(getattr(event, "type", ""))
+    is_encrypted = event_type == "m.room.encrypted"
+
+    # Try to decrypt encrypted timeline events.
+    if is_encrypted and getattr(session, "crypto", None) is not None:
+        try:
+            decrypted = await session.crypto.decrypt_megolm_event(event)
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                f"Encrypted event decrypted: type={getattr(decrypted, 'type', None)}",
+                flush=True,
+            )
+            event = decrypted
+            event_type = str(getattr(event, "type", ""))
+            is_encrypted = False
+        except Exception as e:
+            used = get_disk_usage_ratio("/srv/media")
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                f"Encrypted event could not be decrypted ({type(e).__name__}: {e}). "
+                f"Checking emergency pressure only. Current disk usage: {used:.1%}",
+                flush=True,
+            )
+
+            if used >= policy.emergency:
+                print(f"Emergency pressure detected: {used:.1%} >= {policy.emergency:.1%}", flush=True)
+                await run_pressure(
+                    session=session,
+                    conn=conn,
+                    media_root="/srv/media",
+                    policy=policy,
+                    notifications_room=cfg.notifications.log_room_id,
+                    send_zero=False,
+                    dry_run=False,
+                    print_effective_config=False,
+                )
+            return
+
+    msgtype = getattr(getattr(event, "content", None), "msgtype", None)
+
+    # Still encrypted / unknown: do not log fake uploads.
+    if is_encrypted:
+        used = get_disk_usage_ratio("/srv/media")
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+            f"Encrypted event seen. Checking emergency pressure only. "
+            f"Current disk usage: {used:.1%}",
+            flush=True,
+        )
+
+        if used >= policy.emergency:
+            print(f"Emergency pressure detected: {used:.1%} >= {policy.emergency:.1%}", flush=True)
+            await run_pressure(
+                session=session,
+                conn=conn,
+                media_root="/srv/media",
+                policy=policy,
+                notifications_room=cfg.notifications.log_room_id,
+                send_zero=False,
+                dry_run=False,
+                print_effective_config=False,
+            )
+        return
+
+    # Unencrypted or successfully decrypted: only actual media messages are uploads.
+    if str(msgtype) not in ("m.image", "m.video", "m.file", "m.audio"):
         return
 
     used = get_disk_usage_ratio("/srv/media")
     print(
         f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-        f"Media event seen, logging upload. Current disk usage: {used:.1%}"
+        f"Media event seen, logging upload. msgtype={msgtype}. "
+        f"Current disk usage: {used:.1%}",
+        flush=True,
     )
+
     await log_upload(conn, event)
 
-    if used >= policy.pressure:
-        print(f"Pressure detected: {used:.1%} >= {policy.pressure:.1%}")
+    if used >= policy.emergency:
+        print(f"Emergency pressure detected: {used:.1%} >= {policy.emergency:.1%}", flush=True)
         await run_pressure(
             session=session,
             conn=conn,
@@ -65,7 +133,17 @@ async def main_async(config_path: str):
     global conn
     raw = load_yaml(config_path)
     cfg = FrameworkConfig.from_dict(raw)
-    session = create_client(cfg.bot.mxid, cfg.homeserver.url, cfg.bot.access_token)
+    e2ee_cfg = raw.get("e2ee") or {}
+    if e2ee_cfg.get("enabled"):
+        session = await create_client_e2ee(
+            cfg.bot.mxid,
+            cfg.homeserver.url,
+            cfg.bot.access_token,
+            e2ee_cfg,
+        )
+        print("E2EE enabled for cleaner client", flush=True)
+    else:
+        session = create_client(cfg.bot.mxid, cfg.homeserver.url, cfg.bot.access_token)
 
     try:
         me = await whoami(session)
@@ -95,12 +173,17 @@ async def main_async(config_path: str):
             lambda evt: on_message(evt, session, cfg, policy),
             wait_sync=True,
         )
+        session.client.add_event_handler(
+            EventType.ROOM_ENCRYPTED,
+            lambda evt: on_message(evt, session, cfg, policy),
+            wait_sync=True,
+        )
 
         sync_filter = Filter(
             account_data=EventFilter(not_types=["*"]),
             room=RoomFilter(
                 account_data=RoomEventFilter(not_types=["*"]),
-                timeline=RoomEventFilter(types=[EventType.ROOM_MESSAGE]),
+                timeline=RoomEventFilter(types=[EventType.ROOM_MESSAGE, EventType.ROOM_ENCRYPTED]),
             ),
         )
 

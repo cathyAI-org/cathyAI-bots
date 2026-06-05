@@ -1,8 +1,8 @@
-homeserver_url: "http://conduit:6167"
-server_name: "catcord.duckdns.org"
+homeserver_url: "https://catcord.cathub.dedyn.io"
+server_name: "catcord.cathub.dedyn.io"
 
 bot:
-  mxid: "@catgirl_radio:catcord.duckdns.org"
+  mxid: "@catgirl_radio:catcord.cathub.dedyn.io"
   access_token: ""
 
 notifications:
@@ -36,7 +36,7 @@ add_personality:
   characters_api_key: ""
   characters_api_key_header: "X-API-Key"
   character_id: "delilah"
-  cathy_api_url: "http://192.168.1.57:8100"
+  cathy_api_url: "http://192.168.1.57:8081"
   cathy_api_key: null
   timeout_seconds: 60
   connect_timeout_seconds: 3

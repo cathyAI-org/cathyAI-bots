@@ -1,8 +1,8 @@
-homeserver_url: "http://conduit:6167"
-server_name: "catcord.duckdns.org"
+homeserver_url: "https://catcord.cathub.dedyn.io"
+server_name: "catcord.cathub.dedyn.io"
 
 bot:
-  mxid: "@catcord_cleaner:catcord.duckdns.org"
+  mxid: "@catcord_cleaner:catcord.cathub.dedyn.io"
   access_token: ""
 
 policy:

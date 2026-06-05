@@ -11,4 +11,4 @@ COPY cleaner.py /app/cleaner/cleaner.py
 COPY messages.py /app/cleaner/messages.py
 COPY message_parts.json /app/cleaner/message_parts.json
 
-ENTRYPOINT ["python", "-u", "-m", "cleaner.main"]
+ENTRYPOINT ["python", "-u", "-m", "cleaner.event_main"]

@@ -51,7 +51,7 @@ async def main_async(args):
             enabled=bool(ai_raw.get("enabled", False)),
             prompt_composer_url=str(ai_raw.get("prompt_composer_url", "http://192.168.1.57:8110")),
             character_id=str(ai_raw.get("character_id", "delilah")),
-            cathy_api_url=str(ai_raw.get("cathy_api_url", "http://192.168.1.57:8100")),
+            cathy_api_url=str(ai_raw.get("cathy_api_url", "http://192.168.1.57:8081")),
             cathy_api_key=ai_raw.get("cathy_api_key"),
             timeout_seconds=float(ai_raw.get("timeout_seconds", 60)),
             connect_timeout_seconds=float(ai_raw.get("connect_timeout_seconds", 3)),
