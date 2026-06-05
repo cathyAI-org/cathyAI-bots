@@ -1,5 +1,4 @@
-version: "3.8"
-
+version: '3.8'
 services:
   online:
     build:
@@ -9,17 +8,22 @@ services:
     container_name: online_service
     restart: unless-stopped
     environment:
-      - ONLINE_ALLOWLIST_ROOMS=${ONLINE_ALLOWLIST_ROOMS:-}
+    - ONLINE_ALLOWLIST_ROOMS=${ONLINE_ALLOWLIST_ROOMS:-}
     volumes:
-      - /var/lib/catcord/online:/state:rw
+    - /var/lib/catcord/online:/state:rw
     networks:
-      - internal
+    - internal
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8088/health"]
+      test:
+      - CMD
+      - wget
+      - --quiet
+      - --tries=1
+      - --spider
+      - http://localhost:8088/docs
       interval: 30s
       timeout: 10s
       retries: 3
-
   memory:
     build:
       context: ./services/memory
@@ -28,33 +32,37 @@ services:
     container_name: memory_service
     restart: unless-stopped
     environment:
-      - IDENTITY_API_URL=${IDENTITY_API_URL:-}
-      - IDENTITY_API_KEY=${IDENTITY_API_KEY:-}
-      - IDENTITY_API_TIMEOUT_S=${IDENTITY_API_TIMEOUT_S:-3}
+    - IDENTITY_API_URL=${IDENTITY_API_URL:-}
+    - IDENTITY_API_KEY=${IDENTITY_API_KEY:-}
+    - IDENTITY_API_TIMEOUT_S=${IDENTITY_API_TIMEOUT_S:-3}
     volumes:
-      - /var/lib/catcord/memory:/state:rw
+    - /var/lib/catcord/memory:/state:rw
     networks:
-      - internal
+    - internal
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8090/health"]
+      test:
+      - CMD
+      - wget
+      - --quiet
+      - --tries=1
+      - --spider
+      - http://localhost:8090/docs
       interval: 30s
       timeout: 10s
       retries: 3
-
   cleaner:
     build:
       context: ./cleaner
       dockerfile: Dockerfile
     image: catcord/cleaner:latest
     container_name: cleaner_bot
-    restart: "no"
+    restart: 'no'
     volumes:
-      - ./cleaner/config.yaml:/config/config.yaml:ro
-      - /var/lib/catcord/cleaner:/state:rw
-      - /srv/media:/srv/media:rw
+    - ./cleaner/config.yaml:/config/config.yaml:ro
+    - /var/lib/catcord/cleaner:/state:rw
+    - /srv/media:/srv/media:rw
     networks:
-      - internal
-
+    - internal
   cleaner-event:
     build:
       context: ./cleaner
@@ -62,28 +70,29 @@ services:
     image: catcord/cleaner-event:latest
     container_name: cleaner_event
     restart: unless-stopped
-    entrypoint: ["python", "-u", "-m", "cleaner.event_main"]
     volumes:
-      - ./cleaner/config.yaml:/config/config.yaml:ro
-      - /var/lib/catcord/cleaner:/state:rw
-      - /srv/media:/srv/media:rw
+    - ./cleaner/config.yaml:/config/config.yaml:ro
+    - /var/lib/catcord/cleaner:/state:rw
+    - /srv/media/synapse_media_store:/srv/media:ro
     networks:
-      - internal
-
+    - internal
+    - synapse
   news:
     build:
       context: ./news
       dockerfile: Dockerfile
     image: catcord/news:latest
     container_name: news_bot
-    restart: "no"
+    restart: 'no'
     volumes:
-      - ./news/config.yaml:/config/config.yaml:ro
-      - /var/lib/catcord/news:/state:rw
+    - ./news/config.yaml:/config/config.yaml:ro
+    - /var/lib/catcord/news:/state:rw
     networks:
-      - internal
-
+    - internal
 networks:
   internal:
     external: true
     name: catcord_internal
+  synapse:
+    external: true
+    name: catcord-synapse_default

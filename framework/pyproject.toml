@@ -2,9 +2,14 @@
 name = "catcord-bots-framework"
 version = "0.1.0"
 dependencies = [
-  "mautrix>=0.21.0",
+  "mautrix[encryption]>=0.21.0",
   "PyYAML>=6.0.1",
   "httpx>=0.27.0",
+  "python-olm>=3.2.16",
+  "pycryptodome>=3.23.0",
+  "unpaddedbase64>=2.1.0",
+  "base58>=2.1.1",
+  "asyncpg>=0.30.0",
 ]
 
 [build-system]

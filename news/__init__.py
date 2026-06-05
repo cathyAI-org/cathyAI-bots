@@ -85,7 +85,7 @@ class PersonalityConfig:
     enabled: bool = False
     prompt_composer_url: str = "http://192.168.1.57:8110"
     character_id: str = "delilah"
-    cathy_api_url: str = "http://192.168.1.57:8100"
+    cathy_api_url: str = "http://192.168.1.57:8081"
     cathy_api_key: Optional[str] = None
     timeout_seconds: float = 60
     connect_timeout_seconds: float = 3
